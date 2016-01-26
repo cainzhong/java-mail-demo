@@ -11,7 +11,7 @@
 	</appender>
 	
 	<!-- Application Loggers -->
-	<logger name="com.accenture.haicai">
+	<logger name="com.simple.mail">
 		<level value="info" />
 	</logger>
 	
