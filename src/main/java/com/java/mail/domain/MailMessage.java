@@ -11,6 +11,8 @@ import java.util.List;
  *
  */
 public class MailMessage {
+  private String id;
+
   /* the address of email sender. */
   private List<MailAddress> from;
 
@@ -49,6 +51,14 @@ public class MailMessage {
 
   /* the type of a email message */
   private String contentType;
+
+  public String getId() {
+    return this.id;
+  }
+
+  public void setId(String id) {
+    this.id = id;
+  }
 
   public List<MailAddress> getFrom() {
     return this.from;

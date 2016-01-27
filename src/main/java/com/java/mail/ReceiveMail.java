@@ -38,6 +38,8 @@ public interface ReceiveMail {
    */
   public JSONArray receive(String fromStringTerm, String subjectTerm) throws Exception;
 
+  public JSONArray receiveThroughEWS(String fromStringTerm, String subjectTerm, int pageSize) throws Exception;
+
   /**
    * Copy a message to a specific folder and delete the message in source folder.
    * 

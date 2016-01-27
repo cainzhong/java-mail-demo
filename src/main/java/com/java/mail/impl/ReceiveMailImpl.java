@@ -10,6 +10,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -60,6 +61,27 @@ import com.java.mail.UnknownMimeTypeException;
 import com.java.mail.domain.Attachment;
 import com.java.mail.domain.MailMessage;
 
+import microsoft.exchange.webservices.data.core.ExchangeService;
+import microsoft.exchange.webservices.data.core.PropertySet;
+import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
+import microsoft.exchange.webservices.data.core.enumeration.search.ComparisonMode;
+import microsoft.exchange.webservices.data.core.enumeration.search.ContainmentMode;
+import microsoft.exchange.webservices.data.core.enumeration.search.LogicalOperator;
+import microsoft.exchange.webservices.data.core.exception.service.local.ServiceLocalException;
+import microsoft.exchange.webservices.data.core.exception.service.local.ServiceVersionException;
+import microsoft.exchange.webservices.data.core.service.item.EmailMessage;
+import microsoft.exchange.webservices.data.core.service.item.Item;
+import microsoft.exchange.webservices.data.core.service.schema.EmailMessageSchema;
+import microsoft.exchange.webservices.data.core.service.schema.ItemSchema;
+import microsoft.exchange.webservices.data.credential.ExchangeCredentials;
+import microsoft.exchange.webservices.data.credential.WebCredentials;
+import microsoft.exchange.webservices.data.property.complex.EmailAddress;
+import microsoft.exchange.webservices.data.property.complex.EmailAddressCollection;
+import microsoft.exchange.webservices.data.property.complex.FileAttachment;
+import microsoft.exchange.webservices.data.property.complex.ItemId;
+import microsoft.exchange.webservices.data.search.FindItemsResults;
+import microsoft.exchange.webservices.data.search.ItemView;
+import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
@@ -145,6 +167,10 @@ public class ReceiveMailImpl implements ReceiveMail {
 
   private static int maxattachmentcount;
 
+  private ExchangeService service;
+
+  private String uri;
+
   static {
     // read the attachment segment size from configuration file, if it is null, set as default value.
     String attachmentsegmentsizeStr = Init.getInstance().getProperty("attachmentsegmentsize");
@@ -182,14 +208,23 @@ public class ReceiveMailImpl implements ReceiveMail {
       this.suffixList = (List<String>) map.get("suffixList");
       this.authorisedUserList = (List<String>) map.get("authorisedUserList");
       this.proxySet = (Boolean) map.get("proxySet");
-      if (this.proxySet && this.protocol.equalsIgnoreCase("EWS")) {
-        // For EWS proxy
-        this.proxyHost = (String) map.get("proxyHost");
-        this.proxyPort = (String) map.get("proxyPort");
-        this.proxyUser = (String) map.get("proxyUser");
-        this.proxyPassword = (String) map.get("proxyPassword");
-        this.proxyDomain = (String) map.get("proxyDomain");
-      } else {
+      if (this.protocol.equalsIgnoreCase("EWS")) {
+        this.username = (String) map.get("username");
+        this.password = (String) map.get("password");
+        this.uri = (String) map.get("uri");
+        this.service = new ExchangeService();
+        ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
+        this.service.setCredentials(credentials);
+        this.service.setUrl(new URI(this.uri));
+        if (this.proxySet) {
+          // For EWS proxy
+          this.proxyHost = (String) map.get("proxyHost");
+          this.proxyPort = (String) map.get("proxyPort");
+          this.proxyUser = (String) map.get("proxyUser");
+          this.proxyPassword = (String) map.get("proxyPassword");
+          this.proxyDomain = (String) map.get("proxyDomain");
+        }
+      } else if (this.proxySet) {
         this.proxyHost = (String) map.get("proxyHost");
         this.proxyPort = (String) map.get("proxyPort");
       }
@@ -198,8 +233,18 @@ public class ReceiveMailImpl implements ReceiveMail {
       this.sourceFolderName = (String) map.get("sourceFolderName");
       this.toFolderName = (String) map.get("toFolderName");
 
-      if (isNull(this.host) || isNull(this.port) || isNull(this.protocol) || isNull(this.username) || isNull(this.password)) {
-        String msg = "Missing mandatory values, please check that you have entered the host, port, protocol, username or password.";
+      if (isNull(this.protocol)) {
+        String msg = "Missing mandatory values, please check that you have entered the protocol.";
+        LOG.error(msg);
+        throw new Exception(msg);
+      } else if (this.protocol.equalsIgnoreCase("EWS")) {
+        if (isNull(this.username) || isNull(this.password) || isNull(this.uri)) {
+          String msg = "Missing mandatory values, please check that you have entered the username, password or uri.";
+          LOG.error(msg);
+          throw new Exception(msg);
+        }
+      } else if (isNull(this.host) || isNull(this.port) || isNull(this.username) || isNull(this.password)) {
+        String msg = "Missing mandatory values, please check that you have entered the host, port, username or password.";
         LOG.error(msg);
         throw new Exception(msg);
       } else if (!isAuthorisedUsername(this.authorisedUserList, this.username)) {
@@ -276,6 +321,145 @@ public class ReceiveMailImpl implements ReceiveMail {
     JSONArray jsonArray = JSONArray.fromObject(msgList);
 
     return jsonArray;
+  }
+
+  public JSONArray receiveThroughEWS(String fromStringTerm, String subjectTerm, int pageSize) throws Exception {
+    if (pageSize > this.maxMailQuantity) {
+      pageSize = this.maxMailQuantity;
+    }
+    ItemView view = new ItemView(pageSize);
+    // view.setPropertySet(new PropertySet(BasePropertySet.IdOnly, ItemSchema.Subject, ItemSchema.DateTimeReceived));
+
+    SearchFilter.ContainsSubstring fromTermFilter = new SearchFilter.ContainsSubstring(EmailMessageSchema.From, fromStringTerm);
+    SearchFilter.ContainsSubstring subjectFilter = new SearchFilter.ContainsSubstring(ItemSchema.Subject, subjectTerm, ContainmentMode.Substring, ComparisonMode.IgnoreCase);
+    FindItemsResults<Item> findResults = this.service.findItems(WellKnownFolderName.Inbox, new SearchFilter.SearchFilterCollection(LogicalOperator.And, fromTermFilter, subjectFilter), view);
+
+    System.out.println("Total number of items found: " + findResults.getTotalCount());
+    List<MailMessage> msgList = new ArrayList<MailMessage>();
+    for (Item item : findResults) {
+      MailMessage mailMsg = this.readEmailItem(item.getId());
+      msgList.add(mailMsg);
+    }
+
+    JSONArray jsonArray = JSONArray.fromObject(msgList);
+    return jsonArray;
+  }
+
+  /**
+   * Reading one email at a time. Using Item ID of the email.
+   * Creating a message data map as a return value.
+   */
+  public MailMessage readEmailItem(ItemId itemId) {
+    MailMessage mailMsg = new MailMessage();
+    try {
+      Item item = Item.bind(this.service, itemId, PropertySet.FirstClassProperties);
+      EmailMessage emailMessage = EmailMessage.bind(this.service, item.getId());
+
+      this.setMailMsgForBasicInfo(emailMessage, mailMsg);
+      this.setMailMsgForSimpleMail(emailMessage, mailMsg);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+    return mailMsg;
+  }
+
+  /**
+   * Process attachments.
+   * 
+   * @param part
+   * @param mailMsg
+   * @param attachList
+   * @throws ServiceVersionException
+   * @throws IOException
+   */
+  private void processEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) throws ServiceVersionException, IOException {
+    // generate a new file name with unique UUID.
+    String fileName = fileAttachment.getName();
+    UUID uuid = UUID.randomUUID();
+    String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
+    String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
+    if (this.suffixList.contains(suffix.toLowerCase())) {
+      String tempDir = System.getProperty("java.io.tmpdir");
+      fileName = tempDir + prefix + uuid + "." + suffix;
+
+      int fileSize = fileAttachment.getSize();
+      com.java.mail.domain.Attachment mailAttachment = new com.java.mail.domain.Attachment();
+      mailAttachment.setFileName(fileName);
+      mailAttachment.setFileType(suffix);
+      mailAttachment.setFileSize(fileSize);
+      mailAttachList.add(mailAttachment);
+      mailMsg.setAttachList(mailAttachList);
+      this.saveByteFile(fileName, fileAttachment.getContent(), fileSize);
+    }
+  }
+
+  private void saveByteFile(String fileName, byte[] buf, int fileSize) throws IOException {
+    File file = new File(fileName);
+    if (!file.exists()) {
+      OutputStream out = null;
+      try {
+        out = new BufferedOutputStream(new FileOutputStream(file));
+        if (buf != null && buf.length != 0) {
+          out.write(buf);
+        }
+      } catch (FileNotFoundException e) {
+        e.printStackTrace();
+      } finally {
+        if (out != null) {
+          out.close();
+        }
+      }
+    }
+  }
+
+  /**
+   * Set some basic information to MailMessage .
+   * 
+   * @param msg
+   * @param mailMsg
+   * @throws ServiceLocalException
+   */
+  private void setMailMsgForBasicInfo(EmailMessage emailMessage, MailMessage mailMsg) throws ServiceLocalException {
+    String id = emailMessage.getId().toString();
+    EmailAddress from = emailMessage.getFrom();
+    EmailAddressCollection to = emailMessage.getToRecipients();
+    EmailAddressCollection cc = emailMessage.getCcRecipients();
+    EmailAddressCollection bcc = emailMessage.getBccRecipients();
+    String subject = emailMessage.getSubject();
+    Date sendDate = emailMessage.getDateTimeCreated();
+
+    mailMsg.setId(id);
+    mailMsg.setFrom(MailUtil.convertToMailAddress(from));
+    mailMsg.setTo(MailUtil.convertToMailAddress(to));
+    mailMsg.setCc(MailUtil.convertToMailAddress(cc));
+    mailMsg.setBcc(MailUtil.convertToMailAddress(bcc));
+    mailMsg.setSubject(subject);
+    mailMsg.setSendDate(sendDate);
+  }
+
+  private MailMessage setMailMsgForSimpleMail(EmailMessage emailMessage, MailMessage mailMsg) throws ServiceVersionException, ServiceLocalException, Exception {
+    if (!this.exceedMaxMsgSize(emailMessage.getSize())) {
+      String emailBody = emailMessage.getBody().toString();
+      if (emailMessage.getHasAttachments()) {
+        List<microsoft.exchange.webservices.data.property.complex.Attachment> attachmentList = emailMessage.getAttachments().getItems();
+        boolean exceedMaxAttachmentCount = false;
+        if (attachmentList.size() > maxattachmentcount) {
+          exceedMaxAttachmentCount = true;
+        }
+        if (!exceedMaxAttachmentCount) {
+          List<Attachment> mailAttachList = new ArrayList<Attachment>();
+          for (microsoft.exchange.webservices.data.property.complex.Attachment attachment : attachmentList) {
+            if (attachment instanceof FileAttachment) {
+              FileAttachment fileAttachment = (FileAttachment) attachment;
+              fileAttachment.load();
+              this.processEWSAttachment(fileAttachment, mailMsg, mailAttachList);
+            }
+          }
+        }
+      }
+      mailMsg.setHtmlBody(emailBody);
+    }
+    return mailMsg;
   }
 
   /*
@@ -579,7 +763,7 @@ public class ReceiveMailImpl implements ReceiveMail {
   }
 
   /**
-   * Verify the attachments exceeding the maximum quantity or size.
+   * Verify the mail's size and the attachments exceeding the maximum quantity.
    * 
    * @param multi
    *          Multipart
@@ -639,6 +823,13 @@ public class ReceiveMailImpl implements ReceiveMail {
     return mailSize;
   }
 
+  /**
+   * Determine whether the mail's size exceeds the max mail's size or not.
+   * 
+   * @param msgSize
+   * @return
+   * @throws ExceedException
+   */
   private boolean exceedMaxMsgSize(int msgSize) throws ExceedException {
     boolean exceedMaxMsgSize = false;
     if (msgSize > attachmentsegmentsize * maxattachmentcount) {
