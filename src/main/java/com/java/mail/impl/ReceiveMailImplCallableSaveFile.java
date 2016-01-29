@@ -22,9 +22,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-import javax.activation.DataSource;
-import javax.activation.FileDataSource;
 import javax.mail.Address;
 import javax.mail.FetchProfile;
 import javax.mail.Flags;
@@ -52,7 +53,6 @@ import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
-import org.bouncycastle.mail.smime.SMIMEException;
 import org.bouncycastle.mail.smime.SMIMESigned;
 import org.bouncycastle.operator.OperatorCreationException;
 
@@ -93,7 +93,7 @@ import net.sf.json.JSONObject;
  * @author zhontao
  *
  */
-public class ReceiveMailImpl implements ReceiveMail {
+public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
 
   private static final JLog LOG = new JLog(LogFactory.getLog(ReceiveMailImpl.class));
 
@@ -174,6 +174,10 @@ public class ReceiveMailImpl implements ReceiveMail {
   private ExchangeService service;
 
   private String uri;
+
+  private Thread saveThread = new Thread();
+
+  private ExecutorService pool;
 
   static {
     // read the attachment segment size from configuration file, if it is null, set as default value.
@@ -295,6 +299,8 @@ public class ReceiveMailImpl implements ReceiveMail {
     /* POP3Folder can only receive the mails in 'INBOX', IMAPFolder can receive the mails in all folders including created by user. */
     this.sourceFolder = this.openFolder(this.sourceFolderName, Folder.READ_WRITE);
     this.toFolder = this.openFolder(this.toFolderName, Folder.READ_ONLY);
+
+    this.pool = Executors.newFixedThreadPool(3);
   }
 
   /*
@@ -374,60 +380,8 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @param attachList
    * @throws ServiceVersionException
    * @throws IOException
-   * @throws CMSException
-   * @throws CertificateException
-   * @throws OperatorCreationException
-   * @throws SMIMEException
-   * @throws MessagingException
    */
-  private void processEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) throws ServiceVersionException, IOException, CMSException, OperatorCreationException, CertificateException, SMIMEException, MessagingException {
-    if (fileAttachment.getContentType().equalsIgnoreCase("multipart/signed")) {
-      // DataSource source = new FileDataSource("C:/Users/zhontao/Desktop/smime.p7m");
-      String fileName = this.saveEWSAttachment(fileAttachment, mailMsg, mailAttachList);
-      DataSource source = new FileDataSource(fileName);
-      MimeMultipart multi1 = new MimeMultipart(source);
-      for (int i = 0; i < multi1.getCount(); i++) {
-        Part part1 = multi1.getBodyPart(i);
-        if (part1.getContent() instanceof Multipart) {
-          Multipart multi2 = (Multipart) part1.getContent();
-          for (int j = 0; j < multi2.getCount(); j++) {
-            Part part2 = multi2.getBodyPart(i);
-            String contentType = part2.getContentType();
-            System.out.println(contentType);
-            // generally if the content type multipart/alternative, it is email text.
-            if (part2.isMimeType("multipart/alternative")) {
-              if (part2.getContent() instanceof Multipart) {
-                Multipart multi3 = (Multipart) part2.getContent();
-                for (int k = 0; k < multi3.getCount(); k++) {
-                  Part part4 = multi3.getBodyPart(k);
-                  String contentType1 = part4.getContentType();
-                  System.out.println(contentType1);
-                  if (part4.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
-                    mailMsg.setTxtBody(part4.getContent().toString());
-                  } else if (part4.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
-                    mailMsg.setHtmlBody(part4.getContent().toString());
-                  }
-                }
-              }
-            }
-          }
-        } else {
-          String contentType = part1.getContentType();
-          System.out.println(contentType);
-          String disposition = part1.getDisposition();
-          System.out.println(disposition);
-
-          this.saveFile(part1.getFileName(), part1.getInputStream());
-        }
-      }
-      SMIMESigned signedData = new SMIMESigned(multi1);
-      this.isValid(signedData, mailMsg);
-    }else{    
-      this.saveEWSAttachment(fileAttachment, mailMsg, mailAttachList);
-    }
-  }
-
-  private String saveEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) throws ServiceVersionException, IOException {
+  private void processEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) throws ServiceVersionException, IOException {
     // generate a new file name with unique UUID.
     String fileName = fileAttachment.getName();
     UUID uuid = UUID.randomUUID();
@@ -446,7 +400,6 @@ public class ReceiveMailImpl implements ReceiveMail {
       mailMsg.setAttachList(mailAttachList);
       this.saveByteFile(fileName, fileAttachment.getContent(), fileSize);
     }
-    return fileName;
   }
 
   private void saveByteFile(String fileName, byte[] buf, int fileSize) throws IOException {
@@ -496,7 +449,6 @@ public class ReceiveMailImpl implements ReceiveMail {
   private MailMessage setMailMsgForSimpleMail(EmailMessage emailMessage, MailMessage mailMsg) throws ServiceVersionException, ServiceLocalException, Exception {
     if (!this.exceedMaxMsgSize(emailMessage.getSize())) {
       String emailBody = emailMessage.getBody().toString();
-      mailMsg.setHtmlBody(emailBody);
       if (emailMessage.getHasAttachments()) {
         List<microsoft.exchange.webservices.data.property.complex.Attachment> attachmentList = emailMessage.getAttachments().getItems();
         boolean exceedMaxAttachmentCount = false;
@@ -514,6 +466,7 @@ public class ReceiveMailImpl implements ReceiveMail {
           }
         }
       }
+      mailMsg.setHtmlBody(emailBody);
     }
     return mailMsg;
   }
@@ -557,8 +510,6 @@ public class ReceiveMailImpl implements ReceiveMail {
   }
 
 
-
-
   /**
    * Process message according to specified MIME type.
    * 
@@ -574,8 +525,11 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @throws UnknownMimeTypeException
    * @throws CertificateException
    * @throws ExceedException
+   * @throws ExecutionException
+   * @throws InterruptedException
    */
-  private List<MailMessage> processMsg(Message[] messages, int maxMailSize, Folder sourceFolder, Folder toFolder) throws MessagingException, IOException, OperatorCreationException, CMSException, UnknownMimeTypeException, CertificateException, ExceedException {
+  private List<MailMessage> processMsg(Message[] messages, int maxMailSize, Folder sourceFolder, Folder toFolder)
+      throws MessagingException, IOException, OperatorCreationException, CMSException, UnknownMimeTypeException, CertificateException, ExceedException, InterruptedException, ExecutionException {
     List<MailMessage> msgList = new ArrayList<MailMessage>();
     MailMessage mailMsg = new MailMessage();
     for (int i = 0; i < maxMailSize; i++) {
@@ -608,7 +562,6 @@ public class ReceiveMailImpl implements ReceiveMail {
       System.out.println(" | Total - " + (end - begin) + " ms.");
     }
 
-
     return msgList;
   }
 
@@ -621,8 +574,10 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @throws IOException
    * @throws MessagingException
    * @throws ExceedException
+   * @throws ExecutionException
+   * @throws InterruptedException
    */
-  private MailMessage setMailMsgForSimpleMail(Message msg, MailMessage mailMsg) throws IOException, MessagingException, ExceedException {
+  private MailMessage setMailMsgForSimpleMail(Message msg, MailMessage mailMsg) throws IOException, MessagingException, ExceedException, InterruptedException, ExecutionException {
     long begin = System.currentTimeMillis();
     List<Attachment> attachList = new ArrayList<Attachment>();
 
@@ -646,7 +601,16 @@ public class ReceiveMailImpl implements ReceiveMail {
             mailMsg.setHtmlBody(part.getContent().toString());
           } else {
             // Process the attachment if it is.
-            this.processAttachment(part, mailMsg, attachList);
+            // this.processAttachment(part, mailMsg, attachList);
+            // 创建两个有返回值的任务
+            // Callable c1 = new ProcessAttachment(part, attachList, this.suffixList);
+            // Future f1 = this.pool.submit(c1);
+            // this.pool.shutdown();
+            // 执行任务并获取Future对象
+            ProcessAttachmentThread pat = new ProcessAttachmentThread(part, attachList, this.suffixList);
+            Thread t1 = new Thread(pat);
+            t1.start();
+            t1.join();
           }
         }
       }
@@ -671,8 +635,10 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @throws IOException
    * @throws MessagingException
    * @throws ExceedException
+   * @throws ExecutionException
+   * @throws InterruptedException
    */
-  private MailMessage setMailMsgForSignedMail(Message msg, MailMessage mailMsg) throws IOException, MessagingException, ExceedException {
+  private MailMessage setMailMsgForSignedMail(Message msg, MailMessage mailMsg) throws IOException, MessagingException, ExceedException, InterruptedException, ExecutionException {
     List<Attachment> attachList = new ArrayList<Attachment>();
 
     this.setMailMsgForBasicInfo(msg, mailMsg);
@@ -932,8 +898,10 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @param mailMsg
    * @param attachList
    * @throws IOException
+   * @throws ExecutionException
+   * @throws InterruptedException
    */
-  private void processAttachment(Part part, MailMessage mailMsg, List<Attachment> attachList) throws IOException {
+  private void processAttachment(Part part, MailMessage mailMsg, List<Attachment> attachList) throws IOException, InterruptedException, ExecutionException {
     String disposition = null;
     try {
       disposition = part.getDisposition();
@@ -1147,7 +1115,6 @@ public class ReceiveMailImpl implements ReceiveMail {
   }
 
 
-
   /**
    * Get properties for mail session.
    * 
@@ -1176,6 +1143,5 @@ public class ReceiveMailImpl implements ReceiveMail {
 
     return props;
   }
-
 
 }
