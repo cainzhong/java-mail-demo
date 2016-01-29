@@ -11,7 +11,11 @@ import java.util.List;
  *
  */
 public class MailMessage {
-  private String id;
+  private String msgId;
+
+  private String uid;
+
+  private String username;
 
   /* the address of email sender. */
   private List<MailAddress> from;
@@ -52,12 +56,28 @@ public class MailMessage {
   /* the type of a email message */
   private String contentType;
 
-  public String getId() {
-    return this.id;
+  public String getMsgId() {
+    return this.msgId;
   }
 
-  public void setId(String id) {
-    this.id = id;
+  public void setMsgId(String msgId) {
+    this.msgId = msgId;
+  }
+
+  public String getUid() {
+    return this.uid;
+  }
+
+  public void setUid(String uid) {
+    this.uid = uid;
+  }
+
+  public String getUsername() {
+    return this.username;
+  }
+
+  public void setUsername(String username) {
+    this.username = username;
   }
 
   public List<MailAddress> getFrom() {

@@ -37,15 +37,16 @@ public class ReceiveTest {
       paramMap.put("host", "webmail.hp.com");
       paramMap.put("port", "993");
       paramMap.put("auth", null);
-      // paramMap.put("protocol", "imaps");
-      // paramMap.put("username", "tao.zhong@hpe.com");
-      // paramMap.put("password", "Cisco01!");
-      /* EWS */
-      paramMap.put("protocol", "ews");
-      paramMap.put("username", "cainzhong@cainzhong.win");
+      paramMap.put("protocol", "imaps");
+      paramMap.put("username", "tao.zhong@hpe.com");
       paramMap.put("password", "Cisco01!");
-      paramMap.put("uri", "https://outlook.office365.com/EWS/Exchange.asmx");
-      paramMap.put("maxMailQuantity", 100);
+      /* EWS */
+      // paramMap.put("protocol", "ews");
+      // paramMap.put("username", "cainzhong@cainzhong.win");
+      // paramMap.put("password", "Cisco01!");
+      // paramMap.put("uri", "https://outlook.office365.com/EWS/Exchange.asmx");
+      /* EWS */
+      paramMap.put("maxMailQuantity", 1);
       List<String> suffixList = new ArrayList<String>();
       suffixList.add("css");
       suffixList.add("png");
@@ -81,74 +82,8 @@ public class ReceiveTest {
         System.out.println(result);
       } else {
         receive.open();
-        result = receive.receive(fromStringTerm, subjectTerm).toString();
+        result = receive.receive("", "", false).toString();
         System.out.println(result);
-
-        // System.out.print("Simple Mail with one 170kb attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Simple Mail with one 170kb attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Simple Mail with one 398kb attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Simple Mail with one 398kb attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Simple Mail with one 596kb attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Simple Mail with one 596kb attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Simple Mail with one 912kb attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Simple Mail with one 912kb attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Simple Mail with one 2.98MB attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Simple Mail with one 2.98MB attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Signed Mail without attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Signed Mail without attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Signed Mail with one 170kb attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Signed Mail with one 170kb attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Signed Mail with one 398kb attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Signed Mail with one 398kb attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Signed Mail with one 596kb attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Signed Mail with one 596kb attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Signed Mail with one 912kb attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Signed Mail with one 912kb attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
-        //
-        // System.out.print("Signed Mail with one 2.98M attachment: ");
-        // begin = System.currentTimeMillis();
-        // receive.receive(fromStringTerm, "Signed Mail with one 2.98M attachment");
-        // end = System.currentTimeMillis();
-        // System.out.println((end - begin) / 1000 + " seconds.");
 
         receive.close();
       }

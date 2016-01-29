@@ -3,7 +3,6 @@
  */
 package com.java.mail;
 
-import javax.mail.Message;
 import javax.mail.MessagingException;
 
 import net.sf.json.JSONArray;
@@ -36,7 +35,9 @@ public interface ReceiveMail {
    * @return
    * @throws Exception
    */
-  public JSONArray receive(String fromStringTerm, String subjectTerm) throws Exception;
+  public JSONArray receive(String messageId, boolean save) throws Exception;
+
+  public String receiveAttachment(String messageId);
 
   public JSONArray receiveThroughEWS(String fromStringTerm, String subjectTerm, int pageSize) throws Exception;
 
@@ -46,7 +47,7 @@ public interface ReceiveMail {
    * @param msg
    * @throws MessagingException
    */
-  public void moveMessage(Message msg) throws MessagingException;
+  public String moveMessage(String MessageID) throws MessagingException;
 
   /**
    * Close the connection to the mail server.
