@@ -65,6 +65,7 @@ import com.java.mail.domain.Attachment;
 import com.java.mail.domain.MailMessage;
 import com.sun.mail.pop3.POP3Folder;
 
+import microsoft.exchange.webservices.data.autodiscover.IAutodiscoverRedirectionUrl;
 import microsoft.exchange.webservices.data.core.ExchangeService;
 import microsoft.exchange.webservices.data.core.PropertySet;
 import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
@@ -216,9 +217,17 @@ public class ReceiveMailImpl implements ReceiveMail {
         this.password = (String) map.get("password");
         this.uri = (String) map.get("uri");
         this.service = new ExchangeService();
+        // ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
+        // this.service.setCredentials(credentials);
+        // this.service.setUrl(new URI(this.uri));
+
         ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
         this.service.setCredentials(credentials);
-        this.service.setUrl(new URI(this.uri));
+        // this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
+        this.service.setUrl(new URI("https://outlook.office365.com/EWS/Exchange.asmx"));
+        this.service.setTraceEnabled(true);
+        microsoft.exchange.webservices.data.core.service.folder.Folder inbox = microsoft.exchange.webservices.data.core.service.folder.Folder.bind(this.service, WellKnownFolderName.Inbox);
+        System.out.println("messages: " + inbox.getTotalCount());
         if (this.proxySet) {
           // For EWS proxy
           this.proxyHost = (String) map.get("proxyHost");
@@ -241,7 +250,7 @@ public class ReceiveMailImpl implements ReceiveMail {
         LOG.error(msg);
         throw new Exception(msg);
       } else if (this.protocol.equalsIgnoreCase("EWS")) {
-        if (isNull(this.username) || isNull(this.password) || isNull(this.uri)) {
+        if (isNull(this.username) || isNull(this.password)) {
           String msg = "Missing mandatory values, please check that you have entered the username, password or uri.";
           LOG.error(msg);
           throw new Exception(msg);
@@ -301,7 +310,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    * 
    * @see com.java.mail.ReceiveMail#receive()
    */
-  public JSONArray receive(String messageId, boolean save) throws Exception {
+  public JSONArray receive(boolean save) throws Exception {
     SearchTerm st;
     if (messageId == null || messageId.isEmpty()) {
       // receive mails according to the message id.
@@ -362,6 +371,22 @@ public class ReceiveMailImpl implements ReceiveMail {
     return jsonArray;
   }
 
+  public static class RedirectionUrlCallback implements IAutodiscoverRedirectionUrl {
+    public boolean autodiscoverRedirectionUrlValidationCallback(String redirectionUrl) {
+      return redirectionUrl.toLowerCase().startsWith("https://");
+    }
+  }
+
+  public static ExchangeService connectViaExchangeAutodiscover(String email, String password) throws Exception {
+    ExchangeService service = new ExchangeService();
+    service.setCredentials(new WebCredentials(email, password));
+    service.autodiscoverUrl(email, new RedirectionUrlCallback());
+    service.setTraceEnabled(true);
+    microsoft.exchange.webservices.data.core.service.folder.Folder inbox = microsoft.exchange.webservices.data.core.service.folder.Folder.bind(service, WellKnownFolderName.Inbox);
+    System.out.println("messages: " + inbox.getTotalCount());
+    return service;
+  }
+
   /**
    * Reading one email at a time. Using Item ID of the email.
    * Creating a message data map as a return value.
@@ -373,7 +398,7 @@ public class ReceiveMailImpl implements ReceiveMail {
       EmailMessage emailMessage = EmailMessage.bind(this.service, item.getId());
 
       this.setMailMsgForBasicInfo(emailMessage, mailMsg);
-      this.setMailMsgForSimpleMail(emailMessage, mailMsg);
+      this.setMailMsgForEWSMail(emailMessage, mailMsg);
     } catch (Exception e) {
       e.printStackTrace();
     }
@@ -405,7 +430,7 @@ public class ReceiveMailImpl implements ReceiveMail {
         if (part1.getContent() instanceof Multipart) {
           Multipart multi2 = (Multipart) part1.getContent();
           for (int j = 0; j < multi2.getCount(); j++) {
-            Part part2 = multi2.getBodyPart(i);
+            Part part2 = multi2.getBodyPart(j);
             String contentType = part2.getContentType();
             System.out.println(contentType);
             // generally if the content type multipart/alternative, it is email text.
@@ -423,15 +448,12 @@ public class ReceiveMailImpl implements ReceiveMail {
                   }
                 }
               }
+            } else {
+              this.processAttachment(part2, mailMsg, mailAttachList, true);
             }
           }
         } else {
-          String contentType = part1.getContentType();
-          System.out.println(contentType);
-          String disposition = part1.getDisposition();
-          System.out.println(disposition);
-
-          this.saveFile(part1.getFileName(), part1.getInputStream());
+          this.processAttachment(part1, mailMsg, mailAttachList, true);
         }
       }
       SMIMESigned signedData = new SMIMESigned(multi1);
@@ -447,7 +469,7 @@ public class ReceiveMailImpl implements ReceiveMail {
     UUID uuid = UUID.randomUUID();
     String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
     String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
-    if (this.suffixList.contains(suffix.toLowerCase())) {
+    if (this.suffixList.contains(suffix.toLowerCase()) || suffix.toLowerCase().equalsIgnoreCase("p7m")) {
       String tempDir = System.getProperty("java.io.tmpdir");
       fileName = tempDir + prefix + uuid + "." + suffix;
 
@@ -507,7 +529,7 @@ public class ReceiveMailImpl implements ReceiveMail {
     mailMsg.setSendDate(sendDate);
   }
 
-  private MailMessage setMailMsgForSimpleMail(EmailMessage emailMessage, MailMessage mailMsg) throws ServiceVersionException, ServiceLocalException, Exception {
+  private MailMessage setMailMsgForEWSMail(EmailMessage emailMessage, MailMessage mailMsg) throws ServiceVersionException, ServiceLocalException, Exception {
     if (!this.exceedMaxMsgSize(emailMessage.getSize())) {
       String emailBody = emailMessage.getBody().toString();
       mailMsg.setHtmlBody(emailBody);
@@ -1209,5 +1231,10 @@ public class ReceiveMailImpl implements ReceiveMail {
     // props.put("mail.mime.cachemultipart", false);
 
     return props;
+  }
+
+  public String moveMessage(String MessageID) throws MessagingException {
+    // TODO Auto-generated method stub
+    return null;
   }
 }

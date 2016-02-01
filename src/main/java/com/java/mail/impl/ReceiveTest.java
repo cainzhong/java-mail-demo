@@ -37,12 +37,12 @@ public class ReceiveTest {
       paramMap.put("host", "webmail.hp.com");
       paramMap.put("port", "993");
       paramMap.put("auth", null);
-      paramMap.put("protocol", "imaps");
-      paramMap.put("username", "tao.zhong@hpe.com");
+      // paramMap.put("protocol", "imaps");
+      // paramMap.put("username", "tao.zhong@hpe.com");
       paramMap.put("password", "Cisco01!");
       /* EWS */
-      // paramMap.put("protocol", "ews");
-      // paramMap.put("username", "cainzhong@cainzhong.win");
+      paramMap.put("protocol", "ews");
+      paramMap.put("username", "cainzhong@cainzhong.win");
       // paramMap.put("password", "Cisco01!");
       // paramMap.put("uri", "https://outlook.office365.com/EWS/Exchange.asmx");
       /* EWS */
@@ -52,7 +52,7 @@ public class ReceiveTest {
       suffixList.add("png");
       suffixList.add("jpg");
       suffixList.add("txt");
-      suffixList.add("p7m");
+      // suffixList.add("p7m");
       paramMap.put("suffixList", suffixList);
       List<String> authorisedUserList = new ArrayList<String>();
       authorisedUserList.add("@hpe.com");
@@ -82,7 +82,7 @@ public class ReceiveTest {
         System.out.println(result);
       } else {
         receive.open();
-        result = receive.receive("", "", false).toString();
+        result = receive.receive("", false).toString();
         System.out.println(result);
 
         receive.close();

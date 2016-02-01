@@ -35,7 +35,7 @@ public interface ReceiveMail {
    * @return
    * @throws Exception
    */
-  public JSONArray receive(String messageId, boolean save) throws Exception;
+  public JSONArray receive(boolean save) throws Exception;
 
   public String receiveAttachment(String messageId);
 

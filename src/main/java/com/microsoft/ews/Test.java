@@ -1,6 +1,13 @@
 package com.microsoft.ews;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 import javax.activation.DataSource;
 import javax.activation.FileDataSource;
@@ -19,7 +26,7 @@ public class Test {
         if (part1.getContent() instanceof Multipart) {
           Multipart multi2 = (Multipart) part1.getContent();
           for (int j = 0; j < multi2.getCount(); j++) {
-            Part part2 = multi2.getBodyPart(i);
+            Part part2 = multi2.getBodyPart(j);
             String contentType = part2.getContentType();
             System.out.println(contentType);
             // generally if the content type multipart/alternative, it is email text.
@@ -45,7 +52,7 @@ public class Test {
           String disposition = part1.getDisposition();
           System.out.println(disposition);
           System.out.println(part1.getFileName());
-          // this.saveFile(part1.getFileName(), part1.getInputStream());
+          saveFile(part1.getFileName(), part1.getInputStream());
         }
       }
     } catch (MessagingException e) {
@@ -54,6 +61,38 @@ public class Test {
     } catch (IOException e) {
       // TODO Auto-generated catch block
       e.printStackTrace();
+    }
+  }
+
+  /**
+   * Save file to temp directory.
+   * 
+   * @throws IOException
+   * @throws FileNotFoundException
+   */
+  public static void saveFile(String fileName, InputStream in) throws IOException {
+    File file = new File(fileName);
+    if (!file.exists()) {
+      OutputStream out = null;
+      try {
+        out = new BufferedOutputStream(new FileOutputStream(file));
+        in = new BufferedInputStream(in);
+        byte[] buf = new byte[180];
+        int len;
+        while ((len = in.read(buf)) > 0) {
+          out.write(buf, 0, len);
+        }
+      } catch (FileNotFoundException e) {
+        e.printStackTrace();
+      } finally {
+        // close streams
+        if (in != null) {
+          in.close();
+        }
+        if (out != null) {
+          out.close();
+        }
+      }
     }
   }
 }

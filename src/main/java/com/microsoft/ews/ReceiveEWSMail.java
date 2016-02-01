@@ -62,6 +62,7 @@ public class ReceiveEWSMail {
     ExchangeCredentials credentials = new WebCredentials(username, password);
     service.setCredentials(credentials);
     service.setUrl(new URI(uri));
+    service.autodiscoverUrl(emailAddress);
 
   }
 
