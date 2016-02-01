@@ -41,6 +41,8 @@ public class MailMessage {
   /* the date of sending a email. */
   private Date sendDate;
 
+  private boolean hasAttachments;
+
   /* a list of attachments */
   private List<Attachment> attachList;
 
@@ -55,6 +57,8 @@ public class MailMessage {
 
   /* the type of a email message */
   private String contentType;
+
+  private Enum<MailStatus> mailStatus;
 
   public String getMsgId() {
     return this.msgId;
@@ -144,6 +148,14 @@ public class MailMessage {
     this.sendDate = sendDate;
   }
 
+  public boolean isHasAttachments() {
+    return this.hasAttachments;
+  }
+
+  public void setHasAttachments(boolean hasAttachments) {
+    this.hasAttachments = hasAttachments;
+  }
+
   public List<Attachment> getAttachList() {
     return this.attachList;
   }
@@ -182,5 +194,13 @@ public class MailMessage {
 
   public void setContentType(String contentType) {
     this.contentType = contentType;
+  }
+
+  public Enum<MailStatus> getMailStatus() {
+    return this.mailStatus;
+  }
+
+  public void setMailStatus(Enum<MailStatus> mailStatus) {
+    this.mailStatus = mailStatus;
   }
 }

@@ -1,4 +1,4 @@
-package com.java.mail.impl;
+package com.runnable;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -10,27 +10,27 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.Callable;
 
 import javax.mail.MessagingException;
 import javax.mail.Part;
 
 import com.java.mail.domain.Attachment;
 
-public class ProcessAttachment implements Callable {
+public class ProcessAttachmentThread implements Runnable {
+
   private Part part;
   private List<Attachment> attachList;
   private List<String> suffixList;
 
   public static final int BUFFSIZE = 180;
 
-  public ProcessAttachment(Part part, List<Attachment> attachList, List<String> suffixList) {
+  public ProcessAttachmentThread(Part part, List<Attachment> attachList, List<String> suffixList) {
     this.part = part;
     this.attachList = attachList;
     this.suffixList = suffixList;
   }
 
-  public List<Attachment> call() throws Exception {
+  public void run() {
     String disposition = null;
     try {
       disposition = this.part.getDisposition();
@@ -58,7 +58,6 @@ public class ProcessAttachment implements Callable {
     } catch (IOException e) {
     }
     System.out.println("Thread");
-    return this.attachList;
   }
 
   /**
@@ -94,5 +93,4 @@ public class ProcessAttachment implements Callable {
     }
     System.out.println("Thread");
   }
-
 }

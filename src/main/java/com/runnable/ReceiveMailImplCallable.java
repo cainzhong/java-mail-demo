@@ -1,9 +1,8 @@
 /*
  * (C) Copyright Hewlett-Packard Company, LP -  All Rights Reserved.
  */
-package com.java.mail.impl;
+package com.runnable;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -22,9 +21,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import javax.mail.Address;
 import javax.mail.FetchProfile;
@@ -40,6 +41,7 @@ import javax.mail.Store;
 import javax.mail.UIDFolder;
 import javax.mail.internet.MimeMessage;
 import javax.mail.internet.MimeMultipart;
+import javax.mail.search.FlagTerm;
 import javax.mail.search.FromStringTerm;
 import javax.mail.search.OrTerm;
 import javax.mail.search.SearchTerm;
@@ -58,7 +60,7 @@ import org.bouncycastle.operator.OperatorCreationException;
 
 import com.hp.ov.sm.common.core.Init;
 import com.hp.ov.sm.common.core.JLog;
-import com.java.mail.ExceedException;
+import com.java.mail.InitializeException;
 import com.java.mail.MailUtil;
 import com.java.mail.ReceiveMail;
 import com.java.mail.UnknownMimeTypeException;
@@ -93,9 +95,9 @@ import net.sf.json.JSONObject;
  * @author zhontao
  *
  */
-public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
+public class ReceiveMailImplCallable implements ReceiveMail, Callable {
 
-  private static final JLog LOG = new JLog(LogFactory.getLog(ReceiveMailImpl.class));
+  private static final JLog LOG = new JLog(LogFactory.getLog(ReceiveMailImplCallable.class));
 
   private static final String PROVIDER_NAME = "BC";
 
@@ -175,10 +177,6 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
 
   private String uri;
 
-  private Thread saveThread = new Thread();
-
-  private ExecutorService pool;
-
   static {
     // read the attachment segment size from configuration file, if it is null, set as default value.
     String attachmentsegmentsizeStr = Init.getInstance().getProperty("attachmentsegmentsize");
@@ -195,6 +193,41 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
     maxattachmentcount = Integer.valueOf(maxattachmentcountStr);
   }
 
+  ReceiveMailImplCallable() {
+    // Do nothing.
+  }
+
+  private Message msg;
+
+  ReceiveMailImplCallable(Message msg) {
+    this.msg = msg;
+  }
+
+  public Object call() throws Exception {
+    MailMessage mailMsg = new MailMessage();
+    mailMsg.setContentType(this.msg.getContentType());
+
+    if (this.msg.isMimeType("text/html") || this.msg.isMimeType("text/plain")) {
+      // simple mail without attachment
+      this.setMailMsgForSimpleMail(this.msg, mailMsg);
+    } else if (this.msg.isMimeType("multipart/mixed")) {
+      // simple mail with attachment
+      this.setMailMsgForSimpleMail(this.msg, mailMsg);
+    } else if (this.msg.isMimeType("multipart/signed")) {
+      // signed mail with/without attachment
+      this.validateSignedMail(this.msg, mailMsg);
+      this.setMailMsgForSignedMail(this.msg, mailMsg);
+    } else if (this.msg.isMimeType("application/pkcs7-mime") || this.msg.isMimeType("application/x-pkcs7-mime")) {
+      mailMsg.setContentType(this.msg.getContentType());
+      String e = "It's an encrypted mail. Can not handle the Message receiving from Mail Server.";
+    } else {
+      String e = "Message Content Type: " + this.msg.getContentType() + "Message Subject: " + this.msg.getSubject() + "Message Send Date: " + this.msg.getSentDate() + "Message From: " + this.msg.getFrom().toString()
+          + "It is an unkonwn MIME type. Can not handle the Message receiving from Mail Server.";
+      throw new UnknownMimeTypeException(e);
+    }
+    // this.moveMessage(msg, sourceFolder, toFolder);
+    return mailMsg;
+  }
 
   /*
    * (non-Javadoc)
@@ -299,8 +332,6 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
     /* POP3Folder can only receive the mails in 'INBOX', IMAPFolder can receive the mails in all folders including created by user. */
     this.sourceFolder = this.openFolder(this.sourceFolderName, Folder.READ_WRITE);
     this.toFolder = this.openFolder(this.toFolderName, Folder.READ_ONLY);
-
-    this.pool = Executors.newFixedThreadPool(3);
   }
 
   /*
@@ -308,9 +339,9 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
    * 
    * @see com.java.mail.ReceiveMail#receive()
    */
-  public JSONArray receive(String fromStringTerm, String subjectTerm) throws Exception {
+  public JSONArray receive(String fromStringTerm, String subjectTerm) throws MessagingException {
     // Only receive new mails.
-    // FlagTerm ft = new FlagTerm(new Flags(Flags.Flag.RECENT), true);
+    FlagTerm ft = new FlagTerm(new Flags(Flags.Flag.RECENT), true);
     SearchTerm st = new OrTerm(new FromStringTerm(fromStringTerm), new SubjectTerm(subjectTerm));
     Message[] messages = this.sourceFolder.search(st);
 
@@ -318,17 +349,54 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
     this.sourceFolder.fetch(messages, this.profile);
 
     // restrict reading mail message size to 'maxMailSize'.
-    List<MailMessage> msgList = null;
+    List<MailMessage> msgList = new ArrayList<MailMessage>();
     int msgsLength = messages.length;
     if (msgsLength == 0) {
       return null;
-    } else if (msgsLength > this.maxMailQuantity) {
-      msgList = this.processMsg(messages, this.maxMailQuantity, this.sourceFolder, this.toFolder);
     } else {
-      msgList = this.processMsg(messages, msgsLength, this.sourceFolder, this.toFolder);
+      if (msgsLength > this.maxMailQuantity) {
+        msgsLength = this.maxMailQuantity;
+      }
+      int nThreads = 10;
+      if (msgsLength < nThreads) {
+        nThreads = msgsLength;
+      }
+      ExecutorService pool = Executors.newFixedThreadPool(nThreads);
+      Callable[] c = new Callable[nThreads];
+      for (int i = 0; i < nThreads; i++) {
+        long begin = System.currentTimeMillis();
+        c[i] = new ReceiveMailImplCallable(messages[i]);
+        long end = System.currentTimeMillis();
+        System.out.println("No. " + (i + 1) + " " + (end - begin) / 1000 + " seconds.");
+      }
+      for (int j = 0; j < nThreads; j++) {
+        Future f = pool.submit(c[j]);
+        try {
+          if (f.isDone()) {
+            long begin = System.currentTimeMillis();
+            MailMessage mailMsg = (MailMessage) f.get();
+            long end = System.currentTimeMillis();
+            msgList.add(mailMsg);
+            System.out.println("No. " + (j + 1) + " " + (end - begin) / 1000 + " seconds. " + JSONArray.fromObject(mailMsg).toString());
+          } else {
+            System.out.println("No. " + (j + 1) + "Not Done!");
+          }
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        } catch (ExecutionException e) {
+          e.printStackTrace();
+        }
+      }
     }
 
+    // else if (msgsLength > this.maxMailQuantity) {
+    // msgList = this.processMsg(messages, this.maxMailQuantity, this.sourceFolder, this.toFolder);
+    // } else {
+    // msgList = this.processMsg(messages, msgsLength, this.sourceFolder, this.toFolder);
+    // }
+
     JSONArray jsonArray = JSONArray.fromObject(msgList);
+
     return jsonArray;
   }
 
@@ -392,7 +460,7 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
       fileName = tempDir + prefix + uuid + "." + suffix;
 
       int fileSize = fileAttachment.getSize();
-      Attachment mailAttachment = new Attachment();
+      com.java.mail.domain.Attachment mailAttachment = new com.java.mail.domain.Attachment();
       mailAttachment.setFileName(fileName);
       mailAttachment.setFileType(suffix);
       mailAttachment.setFileSize(fileSize);
@@ -437,7 +505,7 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
     String subject = emailMessage.getSubject();
     Date sendDate = emailMessage.getDateTimeCreated();
 
-    mailMsg.setId(id);
+    mailMsg.setMsgId(id);
     mailMsg.setFrom(MailUtil.convertToMailAddress(from));
     mailMsg.setTo(MailUtil.convertToMailAddress(to));
     mailMsg.setCc(MailUtil.convertToMailAddress(cc));
@@ -509,7 +577,6 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
     this.store.close();
   }
 
-
   /**
    * Process message according to specified MIME type.
    * 
@@ -524,16 +591,12 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
    * @throws CMSException
    * @throws UnknownMimeTypeException
    * @throws CertificateException
-   * @throws ExceedException
-   * @throws ExecutionException
-   * @throws InterruptedException
+   * @throws InitializeException
    */
-  private List<MailMessage> processMsg(Message[] messages, int maxMailSize, Folder sourceFolder, Folder toFolder)
-      throws MessagingException, IOException, OperatorCreationException, CMSException, UnknownMimeTypeException, CertificateException, ExceedException, InterruptedException, ExecutionException {
+  private List<MailMessage> processMsg(Message[] messages, int maxMailSize, Folder sourceFolder, Folder toFolder) throws MessagingException, IOException, OperatorCreationException, CMSException, UnknownMimeTypeException, CertificateException, InitializeException {
     List<MailMessage> msgList = new ArrayList<MailMessage>();
     MailMessage mailMsg = new MailMessage();
     for (int i = 0; i < maxMailSize; i++) {
-      long begin = System.currentTimeMillis();
       Message msg = messages[i];
       mailMsg.setContentType(msg.getContentType());
 
@@ -558,10 +621,7 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
       }
       // this.moveMessage(msg, sourceFolder, toFolder);
       msgList.add(mailMsg);
-      long end = System.currentTimeMillis();
-      System.out.println(" | Total - " + (end - begin) + " ms.");
     }
-
     return msgList;
   }
 
@@ -573,12 +633,9 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
    * @return
    * @throws IOException
    * @throws MessagingException
-   * @throws ExceedException
-   * @throws ExecutionException
-   * @throws InterruptedException
+   * @throws InitializeException
    */
-  private MailMessage setMailMsgForSimpleMail(Message msg, MailMessage mailMsg) throws IOException, MessagingException, ExceedException, InterruptedException, ExecutionException {
-    long begin = System.currentTimeMillis();
+  private MailMessage setMailMsgForSimpleMail(Message msg, MailMessage mailMsg) throws IOException, MessagingException, InitializeException {
     List<Attachment> attachList = new ArrayList<Attachment>();
 
     mailMsg.setSignaturePassed(false);
@@ -601,16 +658,7 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
             mailMsg.setHtmlBody(part.getContent().toString());
           } else {
             // Process the attachment if it is.
-            // this.processAttachment(part, mailMsg, attachList);
-            // 创建两个有返回值的任务
-            // Callable c1 = new ProcessAttachment(part, attachList, this.suffixList);
-            // Future f1 = this.pool.submit(c1);
-            // this.pool.shutdown();
-            // 执行任务并获取Future对象
-            ProcessAttachmentThread pat = new ProcessAttachmentThread(part, attachList, this.suffixList);
-            Thread t1 = new Thread(pat);
-            t1.start();
-            t1.join();
+            this.processAttachment(part, mailMsg, attachList);
           }
         }
       }
@@ -621,8 +669,7 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
         mailMsg.setHtmlBody(msg.getContent().toString());
       }
     }
-    long end = System.currentTimeMillis();
-    System.out.print(" | setMailMsgForSimpleMail - " + (end - begin) / 1000 + " seconds.");
+
     return mailMsg;
   }
 
@@ -634,11 +681,9 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
    * @return
    * @throws IOException
    * @throws MessagingException
-   * @throws ExceedException
-   * @throws ExecutionException
-   * @throws InterruptedException
+   * @throws InitializeException
    */
-  private MailMessage setMailMsgForSignedMail(Message msg, MailMessage mailMsg) throws IOException, MessagingException, ExceedException, InterruptedException, ExecutionException {
+  private MailMessage setMailMsgForSignedMail(Message msg, MailMessage mailMsg) throws IOException, MessagingException, InitializeException {
     List<Attachment> attachList = new ArrayList<Attachment>();
 
     this.setMailMsgForBasicInfo(msg, mailMsg);
@@ -798,11 +843,11 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
    *          Multipart
    * @return
    * @throws MessagingException
-   * @throws ExceedException
+   * @throws InitializeException
    * @throws IOException
    * @throws NumberFormatException
    */
-  private boolean isValidMailMsg(Multipart multi) throws MessagingException, ExceedException, NumberFormatException, IOException {
+  private boolean isValidMailMsg(Multipart multi) throws MessagingException, InitializeException, NumberFormatException, IOException {
     boolean isValid = false;
     boolean exceedMaxMailSize = false;
     int mailSize = 0;
@@ -811,7 +856,7 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
     if (exceedMaxAttachmentCount) {
       String e = "The attachments' quantity exceed the maximum value!";
       LOG.error(e);
-      throw new ExceedException(e);
+      throw new InitializeException(e);
     }
 
     mailSize = this.countMailSize(multi, 0);
@@ -819,7 +864,7 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
       exceedMaxMailSize = true;
       String e = "The size of all the attachments exceed the maximum value!";
       LOG.error(e);
-      throw new ExceedException(e);
+      throw new InitializeException(e);
     }
 
     if (!exceedMaxAttachmentCount && !exceedMaxMailSize) {
@@ -849,7 +894,6 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
         mailSize = mailSize + partSize;
       }
     }
-    System.out.print("Message Size: " + mailSize / 1024 + " KB");
     return mailSize;
   }
 
@@ -858,16 +902,15 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
    * 
    * @param msgSize
    * @return
-   * @throws ExceedException
+   * @throws InitializeException
    */
-  private boolean exceedMaxMsgSize(int msgSize) throws ExceedException {
-    System.out.print("Message Size: " + msgSize / 1024 + " KB");
+  private boolean exceedMaxMsgSize(int msgSize) throws InitializeException {
     boolean exceedMaxMsgSize = false;
     if (msgSize > attachmentsegmentsize * maxattachmentcount) {
       exceedMaxMsgSize = true;
       String e = "The size of all the attachments exceed the maximum value!";
       LOG.error(e);
-      throw new ExceedException(e);
+      throw new InitializeException(e);
     }
     return exceedMaxMsgSize;
   }
@@ -898,10 +941,8 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
    * @param mailMsg
    * @param attachList
    * @throws IOException
-   * @throws ExecutionException
-   * @throws InterruptedException
    */
-  private void processAttachment(Part part, MailMessage mailMsg, List<Attachment> attachList) throws IOException, InterruptedException, ExecutionException {
+  private void processAttachment(Part part, MailMessage mailMsg, List<Attachment> attachList) throws IOException {
     String disposition = null;
     try {
       disposition = part.getDisposition();
@@ -922,7 +963,7 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
           attachment.setFileSize(fileSize);
           attachList.add(attachment);
           mailMsg.setAttachList(attachList);
-          this.saveFile(fileName, part.getInputStream());
+          this.saveFile(fileName, part.getInputStream(), fileSize);
         }
       }
     } catch (MessagingException e) {
@@ -957,7 +998,7 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
         attachment.setFileSize(fileSize);
         attachList.add(attachment);
         mailMsg.setAttachList(attachList);
-        this.saveFile(fileName, part.getInputStream());
+        this.saveFile(fileName, part.getInputStream(), fileSize);
       }
     } catch (MessagingException e) {
       e.printStackTrace();
@@ -971,14 +1012,13 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
    * @throws IOException
    * @throws FileNotFoundException
    */
-  private void saveFile(String fileName, InputStream in) throws IOException {
+  private void saveFile(String fileName, InputStream in, int fileSize) throws IOException {
     File file = new File(fileName);
     if (!file.exists()) {
       OutputStream out = null;
       try {
         out = new BufferedOutputStream(new FileOutputStream(file));
-        in = new BufferedInputStream(in);
-        byte[] buf = new byte[180];
+        byte[] buf = new byte[fileSize];
         int len;
         while ((len = in.read(buf)) > 0) {
           out.write(buf, 0, len);
@@ -1114,7 +1154,6 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
     return isCreated || folderExists;
   }
 
-
   /**
    * Get properties for mail session.
    * 
@@ -1144,4 +1183,18 @@ public class ReceiveMailImplCallableSaveFile implements ReceiveMail {
     return props;
   }
 
+  public JSONArray receive(String messageId, boolean save) throws Exception {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  public String receiveAttachment(String messageId) {
+    // TODO Auto-generated method stub
+    return null;
+  }
+
+  public String moveMessage(String MessageID) throws MessagingException {
+    // TODO Auto-generated method stub
+    return null;
+  }
 }
