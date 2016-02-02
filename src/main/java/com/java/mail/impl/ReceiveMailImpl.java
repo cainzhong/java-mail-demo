@@ -695,7 +695,12 @@ public class ReceiveMailImpl implements ReceiveMail {
 
   // TODO
   private boolean checkUIDExists(String uid) {
-    return false;
+    // this.username;
+    boolean exist = false;
+    // result = select * from table where uid=, username=
+    // result.size>0 exist = true;
+    // else insert uid username into table; exist=fale;
+    return exist;
   }
 
   /**
