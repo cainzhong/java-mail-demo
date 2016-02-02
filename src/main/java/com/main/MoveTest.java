@@ -5,8 +5,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.mail.MessagingException;
-
 import com.java.mail.ReceiveMail;
 import com.java.mail.impl.ReceiveMailImpl;
 
@@ -14,19 +12,20 @@ import net.sf.json.JSONArray;
 
 public class MoveTest {
   public static void main(String args[]) {
-    String sourceFolderName = "SmartEmail";
-    String toFolderName = "Deleted Items";
+    // String sourceFolderName = "SmartEmail";
+    String sourceFolderName = "收件箱";
+    String toFolderName = "Deleted Itemsssss";
 
     Map<String, Object> paramMap = new HashMap<String, Object>();
     paramMap.put("host", "webmail.hp.com");
     paramMap.put("port", "993");
     paramMap.put("auth", null);
-    paramMap.put("protocol", "imaps");
-    paramMap.put("username", "tao.zhong@hpe.com");
+    // paramMap.put("protocol", "imaps");
+    // paramMap.put("username", "tao.zhong@hpe.com");
     paramMap.put("password", "Cisco01!");
     /* EWS */
-    // paramMap.put("protocol", "ews");
-    // paramMap.put("username", "cainzhong@cainzhong.win");
+    paramMap.put("protocol", "ews");
+    paramMap.put("username", "cainzhong@cainzhong.win");
     // paramMap.put("password", "Cisco01!");
     // paramMap.put("uri", "https://outlook.office365.com/EWS/Exchange.asmx");
     /* EWS */
@@ -55,15 +54,11 @@ public class MoveTest {
     JSONArray paramJsonArray = JSONArray.fromObject(paramMap);
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
-    try {
-      ReceiveMail receive = new ReceiveMailImpl();
-      receive.initialize(paramJson);
-      receive.open();
-      String messageId = "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";
-      System.out.println(receive.moveMessage(messageId));
-    } catch (MessagingException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
-    }
+    ReceiveMail receive = new ReceiveMailImpl();
+    receive.initialize(paramJson);
+    // receive.open();
+    // String messageId = "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";
+    String messageId = "AAMkAGU4YmFmZDg3LWJmNzktNGFhYS05OWRmLWZmOGI4ZDc0MTRiMgBGAAAAAAB6fkMyFWApRKo+YfET7+zPBwCb6dlb7F5ESoU4htHysAseAAAAAAEMAACb6dlb7F5ESoU4htHysAseAAAIQ0HqAAA=";
+    System.out.println(receive.moveMessage("ews", messageId));
   }
 }

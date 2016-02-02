@@ -6,8 +6,6 @@ package com.java.mail;
 import javax.mail.MessagingException;
 import javax.mail.NoSuchProviderException;
 
-import com.java.mail.domain.MailMessage;
-
 import net.sf.json.JSONArray;
 
 /**
@@ -42,9 +40,9 @@ public interface ReceiveMail {
    */
   public JSONArray receive(String messageId, boolean save);
 
-  public MailMessage receiveAttachment(String messageId);
+  public JSONArray receiveAttachment(String protocol, String messageId);
 
-  public JSONArray receiveThroughEWS(String messageId, boolean save);
+  public JSONArray receiveViaEWS(String messageId, boolean save);
 
   /**
    * Copy a message to a specific folder and delete the message in source folder.
@@ -52,7 +50,7 @@ public interface ReceiveMail {
    * @param msg
    * @throws MessagingException
    */
-  public int moveMessage(String messageId);
+  public int moveMessage(String protocol, String messageId);
 
   /**
    * Close the connection to the mail server.

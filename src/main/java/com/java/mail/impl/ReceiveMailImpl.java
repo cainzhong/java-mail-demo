@@ -70,22 +70,23 @@ import microsoft.exchange.webservices.data.core.ExchangeService;
 import microsoft.exchange.webservices.data.core.PropertySet;
 import microsoft.exchange.webservices.data.core.WebProxy;
 import microsoft.exchange.webservices.data.core.enumeration.property.WellKnownFolderName;
-import microsoft.exchange.webservices.data.core.enumeration.search.ComparisonMode;
-import microsoft.exchange.webservices.data.core.enumeration.search.ContainmentMode;
-import microsoft.exchange.webservices.data.core.enumeration.search.LogicalOperator;
+import microsoft.exchange.webservices.data.core.enumeration.service.ConflictResolutionMode;
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceLocalException;
 import microsoft.exchange.webservices.data.core.exception.service.local.ServiceVersionException;
 import microsoft.exchange.webservices.data.core.service.item.EmailMessage;
 import microsoft.exchange.webservices.data.core.service.item.Item;
 import microsoft.exchange.webservices.data.core.service.schema.EmailMessageSchema;
-import microsoft.exchange.webservices.data.core.service.schema.ItemSchema;
+import microsoft.exchange.webservices.data.core.service.schema.FolderSchema;
 import microsoft.exchange.webservices.data.credential.ExchangeCredentials;
 import microsoft.exchange.webservices.data.credential.WebCredentials;
 import microsoft.exchange.webservices.data.property.complex.EmailAddress;
 import microsoft.exchange.webservices.data.property.complex.EmailAddressCollection;
 import microsoft.exchange.webservices.data.property.complex.FileAttachment;
+import microsoft.exchange.webservices.data.property.complex.FolderId;
 import microsoft.exchange.webservices.data.property.complex.ItemId;
+import microsoft.exchange.webservices.data.search.FindFoldersResults;
 import microsoft.exchange.webservices.data.search.FindItemsResults;
+import microsoft.exchange.webservices.data.search.FolderView;
 import microsoft.exchange.webservices.data.search.ItemView;
 import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 import net.sf.json.JSONArray;
@@ -150,10 +151,6 @@ public class ReceiveMailImpl implements ReceiveMail {
   private String proxyUser;
 
   private String proxyPassword;
-
-  private String fromStringTerm;
-
-  private String subjectTerm;
 
   private String sourceFolderName;
 
@@ -224,14 +221,11 @@ public class ReceiveMailImpl implements ReceiveMail {
         this.password = (String) map.get("password");
         this.uri = (String) map.get("uri");
         this.service = new ExchangeService();
-        // ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
-        // this.service.setCredentials(credentials);
-        // this.service.setUrl(new URI(this.uri));
 
         ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
         this.service.setCredentials(credentials);
         try {
-          this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
+          // this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
           this.service.setUrl(new URI("https://outlook.office365.com/EWS/Exchange.asmx"));
         } catch (URISyntaxException e) {
           LOG.error(e.toString());
@@ -252,8 +246,6 @@ public class ReceiveMailImpl implements ReceiveMail {
         this.proxyHost = (String) map.get("proxyHost");
         this.proxyPort = (String) map.get("proxyPort");
       }
-      // this.fromStringTerm = (String) map.get("fromStringTerm");
-      // this.subjectTerm = (String) map.get("subjectTerm");
       this.sourceFolderName = (String) map.get("sourceFolderName");
       this.toFolderName = (String) map.get("toFolderName");
 
@@ -350,37 +342,52 @@ public class ReceiveMailImpl implements ReceiveMail {
     return jsonArray;
   }
 
-  public MailMessage receiveAttachment(String messageId) {
-    JSONArray json = this.receive(messageId, true);
+  public JSONArray receiveAttachment(String protocol, String messageId) {
+    protocol = protocol.trim();
+    JSONArray json = null;
+    if (protocol.equalsIgnoreCase("pop3") || protocol.equalsIgnoreCase("pop3s") || protocol.equalsIgnoreCase("imap") || protocol.equalsIgnoreCase("imaps")) {
+      json = this.receive(messageId, true);
+    } else if (protocol.equalsIgnoreCase("ews")) {
+      json = this.receiveViaEWS(messageId, true);
+    }
     MailMessage mailMsg = new MailMessage();
     if (json != null && !json.isEmpty()) {
       List<MailMessage> list = (List<MailMessage>) JSONArray.toCollection(json, MailMessage.class);
       if (list != null && list.size() == 1) {
         mailMsg = list.get(0);
         mailMsg.setMailStatus(MailStatus.Receive_Attachment_Successfully);
-        return mailMsg;
+        return JSONArray.fromObject(mailMsg);
       }
     }
     mailMsg.setMailStatus(MailStatus.Fail_To_Receive_Attachment);
-    return mailMsg;
+    return JSONArray.fromObject(mailMsg);
   }
 
-  public JSONArray receiveThroughEWS(String messageId, boolean save) {
+  public JSONArray receiveViaEWS(String messageId, boolean save) {
+    FolderId sourceFolderId = this.checkAndCreateEWSFolder(this.sourceFolderName);
+
     JSONArray jsonArray = null;
+    List<MailMessage> msgList = new ArrayList<MailMessage>();
     try {
-      ItemView view = new ItemView(this.maxMailQuantity);
-      // view.setPropertySet(new PropertySet(BasePropertySet.IdOnly, ItemSchema.Subject, ItemSchema.DateTimeReceived));
-
-      SearchFilter.ContainsSubstring fromTermFilter = new SearchFilter.ContainsSubstring(EmailMessageSchema.From, this.fromStringTerm);
-      SearchFilter.ContainsSubstring subjectFilter = new SearchFilter.ContainsSubstring(ItemSchema.Subject, this.subjectTerm, ContainmentMode.Substring, ComparisonMode.IgnoreCase);
-      SearchFilter sf = new SearchFilter.SearchFilterCollection(LogicalOperator.And, new SearchFilter.IsEqualTo(EmailMessageSchema.IsRead, false));
-      FindItemsResults<Item> findResults = this.service.findItems(WellKnownFolderName.Inbox, new SearchFilter.SearchFilterCollection(LogicalOperator.And, fromTermFilter, subjectFilter), view);
-
-      System.out.println("Total number of items found: " + findResults.getTotalCount());
-      List<MailMessage> msgList = new ArrayList<MailMessage>();
-      for (Item item : findResults) {
-        MailMessage mailMsg = this.readEmailItem(item.getId());
+      if (!isNull(messageId)) {
+        MailMessage mailMsg = new MailMessage();
+        EmailMessage emailMessage = EmailMessage.bind(this.service, new ItemId(messageId));
+        this.setMailMsgForEWSMail(emailMessage, mailMsg, save);
         msgList.add(mailMsg);
+      } else {
+        ItemView view = new ItemView(this.maxMailQuantity);
+        // view.setPropertySet(new PropertySet(BasePropertySet.IdOnly, ItemSchema.Subject, ItemSchema.DateTimeReceived));
+        String fromStringTerm = "tao.zhong@hpe.com";
+        String subjectTerm = "Signed Mail with 2 attachments.";
+        // SearchFilter.ContainsSubstring fromTermFilter = new SearchFilter.ContainsSubstring(EmailMessageSchema.From, fromStringTerm);
+        // SearchFilter.ContainsSubstring subjectFilter = new SearchFilter.ContainsSubstring(ItemSchema.Subject, subjectTerm, ContainmentMode.Substring, ComparisonMode.IgnoreCase);
+        SearchFilter filter = new SearchFilter.IsEqualTo(EmailMessageSchema.IsRead, false);
+        FindItemsResults<Item> findResults = this.service.findItems(sourceFolderId, filter, view);
+        // FindItemsResults<Item> findResults = this.service.findItems(WellKnownFolderName.Inbox, new SearchFilter.SearchFilterCollection(LogicalOperator.And, fromTermFilter, subjectFilter), view);
+        for (Item item : findResults) {
+          MailMessage mailMsg = this.readEmailItem(item.getId(), save);
+          msgList.add(mailMsg);
+        }
       }
       jsonArray = JSONArray.fromObject(msgList);
     } catch (Exception e) {
@@ -393,16 +400,18 @@ public class ReceiveMailImpl implements ReceiveMail {
    * Reading one email at a time. Using Item ID of the email.
    * Creating a message data map as a return value.
    */
-  public MailMessage readEmailItem(ItemId itemId) {
+  public MailMessage readEmailItem(ItemId itemId, boolean save) {
     MailMessage mailMsg = new MailMessage();
     try {
       Item item = Item.bind(this.service, itemId, PropertySet.FirstClassProperties);
       EmailMessage emailMessage = EmailMessage.bind(this.service, item.getId());
-
       this.setMailMsgForBasicInfo(emailMessage, mailMsg);
-      this.setMailMsgForEWSMail(emailMessage, mailMsg);
+      this.setMailMsgForEWSMail(emailMessage, mailMsg, save);
+      // flag the email message as read.
+      emailMessage.setIsRead(true);
+      emailMessage.update(ConflictResolutionMode.AutoResolve);
     } catch (Exception e) {
-      e.printStackTrace();
+      LOG.error(e.toString());
     }
     return mailMsg;
   }
@@ -434,7 +443,6 @@ public class ReceiveMailImpl implements ReceiveMail {
           for (int j = 0; j < multi2.getCount(); j++) {
             Part part2 = multi2.getBodyPart(j);
             String contentType = part2.getContentType();
-            System.out.println(contentType);
             // generally if the content type multipart/alternative, it is email text.
             if (part2.isMimeType("multipart/alternative")) {
               if (part2.getContent() instanceof Multipart) {
@@ -442,7 +450,6 @@ public class ReceiveMailImpl implements ReceiveMail {
                 for (int k = 0; k < multi3.getCount(); k++) {
                   Part part4 = multi3.getBodyPart(k);
                   String contentType1 = part4.getContentType();
-                  System.out.println(contentType1);
                   if (part4.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
                     mailMsg.setTxtBody(part4.getContent().toString());
                   } else if (part4.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
@@ -497,7 +504,7 @@ public class ReceiveMailImpl implements ReceiveMail {
           out.write(buf);
         }
       } catch (FileNotFoundException e) {
-        e.printStackTrace();
+        LOG.error(e.toString());
       } finally {
         if (out != null) {
           out.close();
@@ -514,7 +521,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @throws ServiceLocalException
    */
   private void setMailMsgForBasicInfo(EmailMessage emailMessage, MailMessage mailMsg) throws ServiceLocalException {
-    String id = emailMessage.getId().toString();
+    String messageId = emailMessage.getId().toString();
     EmailAddress from = emailMessage.getFrom();
     EmailAddressCollection to = emailMessage.getToRecipients();
     EmailAddressCollection cc = emailMessage.getCcRecipients();
@@ -522,7 +529,7 @@ public class ReceiveMailImpl implements ReceiveMail {
     String subject = emailMessage.getSubject();
     Date sendDate = emailMessage.getDateTimeCreated();
 
-    mailMsg.setMsgId(id);
+    mailMsg.setMsgId(messageId);
     mailMsg.setFrom(MailUtil.convertToMailAddress(from));
     mailMsg.setTo(MailUtil.convertToMailAddress(to));
     mailMsg.setCc(MailUtil.convertToMailAddress(cc));
@@ -531,23 +538,26 @@ public class ReceiveMailImpl implements ReceiveMail {
     mailMsg.setSendDate(sendDate);
   }
 
-  private MailMessage setMailMsgForEWSMail(EmailMessage emailMessage, MailMessage mailMsg) throws ServiceVersionException, ServiceLocalException, Exception {
+  private MailMessage setMailMsgForEWSMail(EmailMessage emailMessage, MailMessage mailMsg, boolean save) throws ServiceVersionException, ServiceLocalException, Exception {
     if (!this.exceedMaxMsgSize(emailMessage.getSize())) {
       String emailBody = emailMessage.getBody().toString();
       mailMsg.setHtmlBody(emailBody);
       if (emailMessage.getHasAttachments()) {
-        List<microsoft.exchange.webservices.data.property.complex.Attachment> attachmentList = emailMessage.getAttachments().getItems();
-        boolean exceedMaxAttachmentCount = false;
-        if (attachmentList.size() > maxattachmentcount) {
-          exceedMaxAttachmentCount = true;
-        }
-        if (!exceedMaxAttachmentCount) {
-          List<Attachment> mailAttachList = new ArrayList<Attachment>();
-          for (microsoft.exchange.webservices.data.property.complex.Attachment attachment : attachmentList) {
-            if (attachment instanceof FileAttachment) {
-              FileAttachment fileAttachment = (FileAttachment) attachment;
-              fileAttachment.load();
-              this.processEWSAttachment(fileAttachment, mailMsg, mailAttachList);
+        mailMsg.setHasAttachments(true);
+        if (save) {
+          List<microsoft.exchange.webservices.data.property.complex.Attachment> attachmentList = emailMessage.getAttachments().getItems();
+          boolean exceedMaxAttachmentCount = false;
+          if (attachmentList.size() > maxattachmentcount) {
+            exceedMaxAttachmentCount = true;
+          }
+          if (!exceedMaxAttachmentCount) {
+            List<Attachment> mailAttachList = new ArrayList<Attachment>();
+            for (microsoft.exchange.webservices.data.property.complex.Attachment attachment : attachmentList) {
+              if (attachment instanceof FileAttachment) {
+                FileAttachment fileAttachment = (FileAttachment) attachment;
+                fileAttachment.load();
+                this.processEWSAttachment(fileAttachment, mailMsg, mailAttachList);
+              }
             }
           }
         }
@@ -561,30 +571,47 @@ public class ReceiveMailImpl implements ReceiveMail {
    * 
    * @see com.java.mail.ReceiveMail#moveMessage(javax.mail.Message)
    */
-  public int moveMessage(String messageId) {
+  public int moveMessage(String protocol,String messageId) {
+    int moveMsg = 100;
+    protocol = protocol.trim();
     try {
-      if ((this.sourceFolder != null && this.sourceFolder.isOpen()) && this.toFolder != null) {
-        // receive mails according to the message id.
-        SearchTerm st = new MessageIDTerm(messageId);
-        Message[] messages = this.sourceFolder.search(st);
-        Message msg = messages[0];
-        if (null != msg) {
-          Message[] needCopyMsgs = new Message[1];
-          needCopyMsgs[0] = msg;
-          // Copy the msg to the specific folder
-          this.sourceFolder.copyMessages(needCopyMsgs, this.toFolder);
-          // delete the original msg
-          // only add a delete flag on the message, it will not indeed to execute the delete operation.
-          msg.setFlag(Flags.Flag.DELETED, true);
+      if (protocol.equalsIgnoreCase("pop3") || protocol.equalsIgnoreCase("pop3s") || protocol.equalsIgnoreCase("imap") || protocol.equalsIgnoreCase("imaps")) {
+        if ((this.sourceFolder != null && this.sourceFolder.isOpen()) && this.toFolder != null) {
+          // receive mails according to the message id.
+          SearchTerm st = new MessageIDTerm(messageId);
+          Message[] messages = this.sourceFolder.search(st);
+          Message msg = messages[0];
+          if (null != msg) {
+            Message[] needCopyMsgs = new Message[1];
+            needCopyMsgs[0] = msg;
+            // Copy the msg to the specific folder
+            this.sourceFolder.copyMessages(needCopyMsgs, this.toFolder);
+            // delete the original msg
+            // only add a delete flag on the message, it will not indeed to execute the delete operation.
+            msg.setFlag(Flags.Flag.DELETED, true);
+          } else {
+            moveMsg = MailStatus.No_Message.getCode();
+          }
+        } else {
+          moveMsg = MailStatus.Fail_To_Move_Message.getCode();
         }
+      } else if (protocol.equalsIgnoreCase("ews")) {
+        EmailMessage emailMessage = EmailMessage.bind(this.service, new ItemId(messageId));
+
+        FolderId folderId = this.checkAndCreateEWSFolder(this.toFolderName);
+        emailMessage.move(folderId);
+        moveMsg = MailStatus.Move_Message_Successfully.getCode();
       } else {
-        return MailStatus.Fail_To_Move_Message.getCode();
+        moveMsg = MailStatus.Fail_To_Move_Message.getCode();
       }
     } catch (MessagingException e) {
       LOG.error(e.toString());
-      return MailStatus.Fail_To_Move_Message.getCode();
+      moveMsg = MailStatus.Fail_To_Move_Message.getCode();
+    } catch (Exception e) {
+      LOG.error(e.toString());
+      moveMsg = MailStatus.Fail_To_Move_Message.getCode();
     }
-    return MailStatus.Move_Message_Successfully.getCode();
+    return moveMsg;
   }
 
   /*
@@ -624,7 +651,6 @@ public class ReceiveMailImpl implements ReceiveMail {
     try {
       MailMessage mailMsg = new MailMessage();
       for (int i = 0; i < maxMailSize; i++) {
-        long begin = System.currentTimeMillis();
         MimeMessage msg = (MimeMessage) messages[i];
         if (this.sourceFolder instanceof POP3Folder) {
           POP3Folder pop3Folder = (POP3Folder) this.sourceFolder;
@@ -660,8 +686,6 @@ public class ReceiveMailImpl implements ReceiveMail {
           LOG.error(e);
         }
         msgList.add(mailMsg);
-        long end = System.currentTimeMillis();
-        System.out.println(" | Total - " + (end - begin) + " ms.");
       }
     } catch (MessagingException e) {
       LOG.error(e.toString());
@@ -685,7 +709,6 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @throws InitializeException
    */
   private MailMessage setMailMsgForSimpleMail(Message msg, MailMessage mailMsg, boolean save) {
-    long begin = System.currentTimeMillis();
     List<Attachment> attachList = new ArrayList<Attachment>();
     try {
       mailMsg.setSignaturePassed(false);
@@ -719,17 +742,12 @@ public class ReceiveMailImpl implements ReceiveMail {
         }
       }
     } catch (MessagingException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      LOG.error(e.toString());
     } catch (NumberFormatException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      LOG.error(e.toString());
     } catch (IOException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
+      LOG.error(e.toString());
     }
-    long end = System.currentTimeMillis();
-    System.out.print(" | setMailMsgForSimpleMail - " + (end - begin) / 1000 + " seconds.");
     return mailMsg;
   }
 
@@ -1125,7 +1143,7 @@ public class ReceiveMailImpl implements ReceiveMail {
           out.write(buf, 0, len);
         }
       } catch (FileNotFoundException e) {
-        e.printStackTrace();
+        LOG.error(e.toString());
       } finally {
         // close streams
         if (in != null) {
@@ -1237,6 +1255,33 @@ public class ReceiveMailImpl implements ReceiveMail {
       LOG.error("The folder is created: " + isCreated + ". Messaging Exception: " + e.toString());
     }
     return isCreated || folderExists;
+  }
+
+  private FolderId checkAndCreateEWSFolder(String folderName) {
+    boolean folderExists = false;
+    FolderId folderId = null;
+    try {
+      FolderView view = new FolderView(1);
+      SearchFilter filter = new SearchFilter.IsEqualTo(FolderSchema.DisplayName, folderName);
+      FindFoldersResults results = this.service.findFolders(WellKnownFolderName.MsgFolderRoot, filter, view);
+      Iterator<microsoft.exchange.webservices.data.core.service.folder.Folder> it = results.iterator();
+      while (it.hasNext()) {
+        microsoft.exchange.webservices.data.core.service.folder.Folder folder = it.next();
+        folderId = folder.getId();
+        folderExists = true;
+      }
+      if (!folderExists) {
+        microsoft.exchange.webservices.data.core.service.folder.Folder folder = new microsoft.exchange.webservices.data.core.service.folder.Folder(this.service);
+        folder.setDisplayName(folderName);
+        // creates the folder as a child of the MsgFolderRoot folder.
+        folder.save(WellKnownFolderName.MsgFolderRoot);
+        folderId = folder.getId();
+      }
+    } catch (Exception e) {
+      LOG.error(e.toString());
+    }
+    return folderId;
+
   }
 
   /**

@@ -6,10 +6,11 @@ public enum MailStatus {
           105), Encrypted_Mail(
               "It's an encrypted mail. Can not handle the Message receiving from Mail Server.",
               106), Protocol_Missing("Missing mandatory values, please check that you have entered the protocol.",
- 107), UP_Missing("Missing mandatory values, please check that you have entered the username, password.",
+                  107), UP_Missing("Missing mandatory values, please check that you have entered the username, password.",
                       108), HPUP_Missing("Missing mandatory values, please check that you have entered the host, port, username or password.", 109), Not_Authorised_User(
                           "The user name is not belong to authorised user domain!", 110), Initialize_Successfully("Initialize successfully.",
-                              111), Receive_Attachment_Successfully("Receive attachment successfully", 112), Fail_To_Receive_Attachment("Fail to receive attachment", 113), Delete_Attachment_Successfully("Delete attachment successfully", 114), Fail_To_Delete_Attachment("Fail to delete attachment", 115);
+ 111), Receive_Attachment_Successfully("Receive attachment successfully", 112), Fail_To_Receive_Attachment("Fail to receive attachment",
+                      113), Delete_Attachment_Successfully("Delete attachment successfully", 114), Fail_To_Delete_Attachment("Fail to delete attachment", 115), OK("OK", 116);
   private String desc;
   private int code;
   private MailStatus(String desc,int code){

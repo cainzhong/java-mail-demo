@@ -31,19 +31,20 @@ public class ReceiveTest {
       // String subjectTerm = "27M attachments";
       String subjectTerm = "Multi-Thread Mail Test";
 
-      String sourceFolderName = "SmartEmail";
+      // String sourceFolderName = "SmartEmail";
+      String sourceFolderName = "收件箱";
       String toFolderName = "Deleted Items";
 
       Map<String, Object> paramMap = new HashMap<String, Object>();
       paramMap.put("host", "webmail.hp.com");
       paramMap.put("port", "993");
       paramMap.put("auth", null);
-      paramMap.put("protocol", "imaps");
-      paramMap.put("username", "tao.zhong@hpe.com");
+      // paramMap.put("protocol", "imaps");
+      // paramMap.put("username", "tao.zhong@hpe.com");
       paramMap.put("password", "Cisco01!");
       /* EWS */
-      // paramMap.put("protocol", "ews");
-      // paramMap.put("username", "cainzhong@cainzhong.win");
+      paramMap.put("protocol", "ews");
+      paramMap.put("username", "cainzhong@cainzhong.win");
       // paramMap.put("password", "Cisco01!");
       // paramMap.put("uri", "https://outlook.office365.com/EWS/Exchange.asmx");
       /* EWS */
@@ -79,12 +80,13 @@ public class ReceiveTest {
         String subjectTermEWS = "Signed Mail with 2 attachments.";
         // String subjectTermEWS = "Simple Mail with 2 attachments.";
         // String subjectTermEWS = "Simple Mail without attachments.";
-        result = receive.receiveThroughEWS(null, false).toString();
+        String msgId = "AAMkAGU4YmFmZDg3LWJmNzktNGFhYS05OWRmLWZmOGI4ZDc0MTRiMgBGAAAAAAB6fkMyFWApRKo+YfET7+zPBwCb6dlb7F5ESoU4htHysAseAAAAAAEMAACb6dlb7F5ESoU4htHysAseAAAAerpbAAA=";
+        result = receive.receiveViaEWS(null, false).toString();
         System.out.println(result);
       } else {
         receive.open();
         String messageId = "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";
-        result = receive.receive(messageId, true).toString();
+        result = receive.receiveAttachment("imaps", messageId).toString();
         System.out.println(result);
 
         receive.close();
