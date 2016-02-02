@@ -1,7 +1,7 @@
 /*
  * (C) Copyright Hewlett-Packard Company, LP -  All Rights Reserved.
  */
-package com.java.mail.impl;
+package com.main;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.java.mail.ReceiveMail;
+import com.java.mail.impl.ReceiveMailImpl;
 
 import net.sf.json.JSONArray;
 
