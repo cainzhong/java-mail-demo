@@ -318,16 +318,14 @@ public class ReceiveMailImpl implements ReceiveMail {
     JSONArray jsonArray = null;
     try {
       SearchTerm st;
-      if (messageId != null || !messageId.isEmpty()) {
+      if (!isNull(messageId)) {
         // receive mails according to the message id.
         st = new MessageIDTerm(messageId);
       } else {
         // Only receive new mails.
-        st = new FlagTerm(new Flags(Flags.Flag.FLAGGED), true);
+        st = new FlagTerm(new Flags(Flags.Flag.RECENT), true);
       }
-      Message[] messages;
-
-      messages = this.sourceFolder.search(st);
+      Message[] messages = this.sourceFolder.search(st);
 
       // Get mails and UID
       this.sourceFolder.fetch(messages, this.profile);
@@ -353,18 +351,17 @@ public class ReceiveMailImpl implements ReceiveMail {
   }
 
   public MailMessage receiveAttachment(String messageId) {
-    JSONArray result = this.receive(messageId, true);
+    JSONArray json = this.receive(messageId, true);
     MailMessage mailMsg = new MailMessage();
-    if (result != null && !result.isEmpty()) {
-      result.
-      List<MailMessage> list = result.toList(result);
-      if (list.size() == 1) {
+    if (json != null && !json.isEmpty()) {
+      List<MailMessage> list = (List<MailMessage>) JSONArray.toCollection(json, MailMessage.class);
+      if (list != null && list.size() == 1) {
         mailMsg = list.get(0);
         mailMsg.setMailStatus(MailStatus.Receive_Attachment_Successfully);
         return mailMsg;
       }
     }
-    mailMsg.setMailStatus(MailStatus.Fail_To_receive_attachment);
+    mailMsg.setMailStatus(MailStatus.Fail_To_Receive_Attachment);
     return mailMsg;
   }
 
@@ -377,9 +374,7 @@ public class ReceiveMailImpl implements ReceiveMail {
       SearchFilter.ContainsSubstring fromTermFilter = new SearchFilter.ContainsSubstring(EmailMessageSchema.From, this.fromStringTerm);
       SearchFilter.ContainsSubstring subjectFilter = new SearchFilter.ContainsSubstring(ItemSchema.Subject, this.subjectTerm, ContainmentMode.Substring, ComparisonMode.IgnoreCase);
       SearchFilter sf = new SearchFilter.SearchFilterCollection(LogicalOperator.And, new SearchFilter.IsEqualTo(EmailMessageSchema.IsRead, false));
-      FindItemsResults<Item> findResults;
-
-      findResults = this.service.findItems(WellKnownFolderName.Inbox, new SearchFilter.SearchFilterCollection(LogicalOperator.And, fromTermFilter, subjectFilter), view);
+      FindItemsResults<Item> findResults = this.service.findItems(WellKnownFolderName.Inbox, new SearchFilter.SearchFilterCollection(LogicalOperator.And, fromTermFilter, subjectFilter), view);
 
       System.out.println("Total number of items found: " + findResults.getTotalCount());
       List<MailMessage> msgList = new ArrayList<MailMessage>();
@@ -568,9 +563,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    */
   public int moveMessage(String messageId) {
     try {
-      Folder sourceFolder = this.getExistingFolder(this.sourceFolderName);
-      Folder toFolder = this.getExistingFolder(this.toFolderName);
-      if ((sourceFolder != null && sourceFolder.isOpen()) && (toFolder != null && toFolder.isOpen())) {
+      if ((this.sourceFolder != null && this.sourceFolder.isOpen()) && this.toFolder != null) {
         // receive mails according to the message id.
         SearchTerm st = new MessageIDTerm(messageId);
         Message[] messages = this.sourceFolder.search(st);
@@ -579,11 +572,13 @@ public class ReceiveMailImpl implements ReceiveMail {
           Message[] needCopyMsgs = new Message[1];
           needCopyMsgs[0] = msg;
           // Copy the msg to the specific folder
-          sourceFolder.copyMessages(needCopyMsgs, toFolder);
+          this.sourceFolder.copyMessages(needCopyMsgs, this.toFolder);
           // delete the original msg
           // only add a delete flag on the message, it will not indeed to execute the delete operation.
           msg.setFlag(Flags.Flag.DELETED, true);
         }
+      } else {
+        return MailStatus.Fail_To_Move_Message.getCode();
       }
     } catch (MessagingException e) {
       LOG.error(e.toString());
@@ -633,10 +628,7 @@ public class ReceiveMailImpl implements ReceiveMail {
         MimeMessage msg = (MimeMessage) messages[i];
         if (this.sourceFolder instanceof POP3Folder) {
           POP3Folder pop3Folder = (POP3Folder) this.sourceFolder;
-          String uid;
-
-          uid = pop3Folder.getUID(msg);
-
+          String uid = pop3Folder.getUID(msg);
           mailMsg.setUid(uid);
           mailMsg.setUsername(this.username);
           // if the uid exists that means the mail has already been read. Jump to read next mail.
@@ -1200,25 +1192,6 @@ public class ReceiveMailImpl implements ReceiveMail {
   }
 
   /**
-   * Get a folder according to the folder name if it exists.
-   * 
-   * @param folderName
-   * @return
-   */
-  private Folder getExistingFolder(String folderName) {
-    Folder folder;
-    try {
-      folder = this.store.getFolder(folderName);
-      if (folder != null && folder.isOpen()) {
-        return folder;
-      }
-    } catch (MessagingException e) {
-      LOG.error(e.toString());
-    }
-    return null;
-  }
-
-  /**
    * Close a folder according to the folder name if it opens.
    * 
    * @param folderName
@@ -1291,5 +1264,15 @@ public class ReceiveMailImpl implements ReceiveMail {
     // props.put("mail.mime.cachemultipart", false);
 
     return props;
+  }
+
+  public int deleteAttachments(String path) {
+    File file = new File(path);
+    if (file.isFile() && file.exists()) {
+      file.delete();
+    } else {
+      return MailStatus.Fail_To_Delete_Attachment.getCode();
+    }
+    return MailStatus.Delete_Attachment_Successfully.getCode();
   }
 }

@@ -1,4 +1,4 @@
-package com.microsoft.ews;
+package com.main;
 
 import java.net.URI;
 
@@ -9,7 +9,7 @@ import microsoft.exchange.webservices.data.core.service.folder.Folder;
 import microsoft.exchange.webservices.data.credential.ExchangeCredentials;
 import microsoft.exchange.webservices.data.credential.WebCredentials;
 
-public class Ex00_ConnectionTest {
+public class EWSConnectionTest {
   public static class RedirectionUrlCallback implements IAutodiscoverRedirectionUrl {
     public boolean autodiscoverRedirectionUrlValidationCallback(String redirectionUrl) {
       return redirectionUrl.toLowerCase().startsWith("https://");

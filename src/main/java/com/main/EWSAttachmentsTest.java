@@ -1,4 +1,4 @@
-package com.microsoft.ews;
+package com.main;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -16,7 +16,7 @@ import javax.mail.Multipart;
 import javax.mail.Part;
 import javax.mail.internet.MimeMultipart;
 
-public class Test {
+public class EWSAttachmentsTest {
   public static void main(String args[]) {
     try {
       DataSource source = new FileDataSource("C:/Users/zhontao/Desktop/smime.p7m");

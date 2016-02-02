@@ -37,12 +37,12 @@ public class ReceiveTest {
       paramMap.put("host", "webmail.hp.com");
       paramMap.put("port", "993");
       paramMap.put("auth", null);
-      // paramMap.put("protocol", "imaps");
-      // paramMap.put("username", "tao.zhong@hpe.com");
+      paramMap.put("protocol", "imaps");
+      paramMap.put("username", "tao.zhong@hpe.com");
       paramMap.put("password", "Cisco01!");
       /* EWS */
-      paramMap.put("protocol", "ews");
-      paramMap.put("username", "cainzhong@cainzhong.win");
+      // paramMap.put("protocol", "ews");
+      // paramMap.put("username", "cainzhong@cainzhong.win");
       // paramMap.put("password", "Cisco01!");
       // paramMap.put("uri", "https://outlook.office365.com/EWS/Exchange.asmx");
       /* EWS */
@@ -78,11 +78,12 @@ public class ReceiveTest {
         String subjectTermEWS = "Signed Mail with 2 attachments.";
         // String subjectTermEWS = "Simple Mail with 2 attachments.";
         // String subjectTermEWS = "Simple Mail without attachments.";
-        result = receive.receiveThroughEWS(fromStringTerm, subjectTermEWS, 1).toString();
+        result = receive.receiveThroughEWS(null, false).toString();
         System.out.println(result);
       } else {
         receive.open();
-        result = receive.receive("", false).toString();
+        String messageId = "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";
+        result = receive.receive(messageId, true).toString();
         System.out.println(result);
 
         receive.close();

@@ -6,7 +6,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-public class test {
+public class CallableTest {
 
   public static void main(String[] args) throws InterruptedException, ExecutionException {
     MyThread1 myThread1 = new MyThread1("Cain");

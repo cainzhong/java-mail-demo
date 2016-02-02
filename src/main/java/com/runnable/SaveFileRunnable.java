@@ -1,4 +1,4 @@
-package com.java.mail.impl;
+package com.runnable;
 
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -8,7 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-public class SaveFile implements Runnable {
+public class SaveFileRunnable implements Runnable {
 
   private String fileName;
   private InputStream in;
@@ -16,7 +16,7 @@ public class SaveFile implements Runnable {
 
   public static final int BUFFSIZE = 180;
 
-  public SaveFile(String msgId, String fileName, InputStream in) {
+  public SaveFileRunnable(String msgId, String fileName, InputStream in) {
     this.msgId = msgId;
     this.fileName = fileName;
     this.in = in;

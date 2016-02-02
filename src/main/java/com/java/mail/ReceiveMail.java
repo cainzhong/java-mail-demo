@@ -60,4 +60,6 @@ public interface ReceiveMail {
    * @throws MessagingException
    */
   public void close();
+
+  public int deleteAttachments(String path);
 }

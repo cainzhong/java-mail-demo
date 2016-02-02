@@ -1,4 +1,4 @@
-package com.java.mail;
+package com.main;
 
 import java.util.Properties;
 
@@ -7,10 +7,10 @@ import javax.mail.MessagingException;
 import javax.mail.Session;
 import javax.mail.Store;
 
-public class CreateFolder {
+public class CreateFolderTest {
 
   public static void main(String[] args) {
-    CreateFolder createFolder = new CreateFolder();
+    CreateFolderTest createFolder = new CreateFolderTest();
     try {
       createFolder.createFolder("bbb");
     } catch (MessagingException e) {
