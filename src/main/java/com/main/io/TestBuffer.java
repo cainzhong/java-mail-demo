@@ -1,4 +1,4 @@
-package com.io;
+package com.main.io;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -17,12 +17,12 @@ public class TestBuffer {
     String to = "C:/Users/zhontao/Pictures/2.74mb-Copy.jpg";
     TestBuffer.readWriteWithBuffer(from, to);
     long endTime1 = System.currentTimeMillis();
-    System.out.println("使用缓冲区读取耗时：" + (endTime1 - startTime1) + "ms");
+    System.out.println("使用缓冲区读�?�耗时：" + (endTime1 - startTime1) + "ms");
     long startTime = System.currentTimeMillis();
     String to1 = "C:/Users/zhontao/Pictures/2.74mb-Copy-1.jpg";
     TestBuffer.readWrite(from, to1);
     long endTime = System.currentTimeMillis();
-    System.out.println("直接读取耗时：" + (endTime - startTime) + "ms");
+    System.out.println("直接读�?�耗时：" + (endTime - startTime) + "ms");
 
   }
 

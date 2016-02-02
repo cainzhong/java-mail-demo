@@ -1,4 +1,4 @@
-package com.io;
+package com.main.io;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -185,9 +185,9 @@ public class ReadFileTools {
       boolean d = destFile.delete();
 
       if (d) {
-        System.out.print("删除成功！");
+        System.out.print("删除�?功�?");
       } else {
-        System.out.print("删除失败！");
+        System.out.print("删除失败�?");
       }
     }
     BufferedInputStream input = new BufferedInputStream(new FileInputStream(srcFile));
