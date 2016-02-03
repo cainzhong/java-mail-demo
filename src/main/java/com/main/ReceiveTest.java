@@ -21,16 +21,6 @@ public class ReceiveTest {
 
   public static void main(String args[]) {
     try {
-      String fromStringTerm = "tao.zhong@hpe.com";
-      // String subjectTerm = "Simple Mail without attachment";
-      // String subjectTerm = "Simple Mail With 2 attachments";
-      // String subjectTerm = "Sign Mail without attachment";
-      // String subjectTerm = "Sign Mail with 2 attachments";
-      // String subjectTerm = "Multi Mail with 2 attachments";
-      // String subjectTerm = "Multi Mail";
-      // String subjectTerm = "27M attachments";
-      String subjectTerm = "Multi-Thread Mail Test";
-
       // String sourceFolderName = "SmartEmail";
       String sourceFolderName = "收件箱";
       String toFolderName = "Deleted Items";
@@ -76,17 +66,18 @@ public class ReceiveTest {
       ReceiveMail receive = new ReceiveMailImpl();
       receive.initialize(paramJson);
       String result = "";
-      if (paramMap.get("protocol").toString().equalsIgnoreCase("ews")) {
-        String subjectTermEWS = "Signed Mail with 2 attachments.";
-        // String subjectTermEWS = "Simple Mail with 2 attachments.";
-        // String subjectTermEWS = "Simple Mail without attachments.";
-        String msgId = "AAMkAGU4YmFmZDg3LWJmNzktNGFhYS05OWRmLWZmOGI4ZDc0MTRiMgBGAAAAAAB6fkMyFWApRKo+YfET7+zPBwCb6dlb7F5ESoU4htHysAseAAAAAAEMAACb6dlb7F5ESoU4htHysAseAAAAerpbAAA=";
-        result = receive.receiveViaEWS(null, false).toString();
+      String protocol = (String) paramMap.get("protocol");
+      if (protocol.equalsIgnoreCase("ews")) {
+        String msgId = "AAMkAGU4YmFmZDg3LWJmNzktNGFhYS05OWRmLWZmOGI4ZDc0MTRiMgBGAAAAAAB6fkMyFWApRKo+YfET7+zPBwCb6dlb7F5ESoU4htHysAseAAAAAAEMAACb6dlb7F5ESoU4htHysAseAAAJnroQAAA=";
+        // result = receive.receiveViaEWS(msgId, false).toString();
+        result = receive.receiveAttachment("ews", msgId).toString();
         System.out.println(result);
-      } else {
+      } else if (protocol.equalsIgnoreCase("pop3") || protocol.equalsIgnoreCase("pop3s") || protocol.equalsIgnoreCase("imap") || protocol.equalsIgnoreCase("imaps")) {
         receive.open();
-        String messageId = "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";
-        result = receive.receiveAttachment("imaps", messageId).toString();
+        result = receive.receive(null, false).toString();
+        // String messageId = "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";
+        // <5CAF9A738A54854FB156427742303E850291A2@G9W0749.americas.hpqcorp.net>
+        // result = receive.receiveAttachment("imaps", messageId).toString();
         System.out.println(result);
 
         receive.close();

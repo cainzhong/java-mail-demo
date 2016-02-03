@@ -4,7 +4,6 @@
 package com.java.mail;
 
 import javax.mail.MessagingException;
-import javax.mail.NoSuchProviderException;
 
 import net.sf.json.JSONArray;
 
@@ -15,49 +14,71 @@ import net.sf.json.JSONArray;
 public interface ReceiveMail {
 
   /**
-   * Get the incoming parameters, their format is JSON, transfer them to Map<String, Object> and initialize them.
+   * Initialize the incoming parameters, their format is JSON.
    * 
    * @param jsonParam
-   * @throws Exception
+   * @return error code
    */
   public int initialize(String jsonParam);
 
   /**
    * Connect to the mail server.
    * 
-   * @throws NoSuchProviderException
-   * 
    * @throws MessagingException
-   * @throws Exception
    */
   public void open() throws MessagingException;
 
   /**
-   * Receive mails.
+   * Receive mails via POP3, POP3S, IMAP, IMAPS.
    * 
+   * @param messageId
+   * @param save
+   *          true indicates the attachment will be saved
    * @return
-   * @throws Exception
    */
   public JSONArray receive(String messageId, boolean save);
 
-  public JSONArray receiveAttachment(String protocol, String messageId);
-
+  /**
+   * Receive mails via EWS(Exchange Web Service).
+   * 
+   * @param messageId
+   * @param save
+   *          true indicates the attachment will be saved
+   * @return
+   */
   public JSONArray receiveViaEWS(String messageId, boolean save);
 
   /**
-   * Copy a message to a specific folder and delete the message in source folder.
+   * Receive attachments of specific mail.
    * 
-   * @param msg
-   * @throws MessagingException
+   * @param protocol
+   *          POP3, POP3S, IMAP, IMAPS or EWS
+   * @param messageId
+   * @return
+   */
+  public JSONArray receiveAttachment(String protocol, String messageId);
+
+  /**
+   * Move a message to a specific folder.
+   * 
+   * @param protocol
+   *          POP3, POP3S, IMAP, IMAPS or EWS
+   * @param messageId
+   * @return
    */
   public int moveMessage(String protocol, String messageId);
 
   /**
    * Close the connection to the mail server.
    * 
-   * @throws MessagingException
    */
   public void close();
 
+  /**
+   * Delete attachments.
+   * 
+   * @param path
+   * @return
+   */
   public int deleteAttachments(String path);
 }

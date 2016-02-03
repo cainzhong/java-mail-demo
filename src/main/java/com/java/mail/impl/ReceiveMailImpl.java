@@ -11,7 +11,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -63,7 +62,6 @@ import com.java.mail.ReceiveMail;
 import com.java.mail.domain.Attachment;
 import com.java.mail.domain.MailMessage;
 import com.java.mail.domain.MailStatus;
-import com.sun.mail.pop3.POP3Folder;
 
 import microsoft.exchange.webservices.data.autodiscover.IAutodiscoverRedirectionUrl;
 import microsoft.exchange.webservices.data.core.ExchangeService;
@@ -191,6 +189,7 @@ public class ReceiveMailImpl implements ReceiveMail {
   }
 
   public static class RedirectionUrlCallback implements IAutodiscoverRedirectionUrl {
+    @Override
     public boolean autodiscoverRedirectionUrlValidationCallback(String redirectionUrl) {
       return redirectionUrl.toLowerCase().startsWith("https://");
     }
@@ -201,6 +200,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    * 
    * @see com.java.mail.ReceiveMail#initialize(java.lang.String)
    */
+  @Override
   @SuppressWarnings("unchecked")
   public int initialize(String jsonParam) {
     JSONObject jsonObject = JSONObject.fromObject(jsonParam);
@@ -225,8 +225,8 @@ public class ReceiveMailImpl implements ReceiveMail {
         ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
         this.service.setCredentials(credentials);
         try {
-          // this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
-          this.service.setUrl(new URI("https://outlook.office365.com/EWS/Exchange.asmx"));
+          this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
+          // this.service.setUrl(new URI("https://outlook.office365.com/EWS/Exchange.asmx"));
         } catch (URISyntaxException e) {
           LOG.error(e.toString());
         } catch (Exception e) {
@@ -278,6 +278,7 @@ public class ReceiveMailImpl implements ReceiveMail {
     return MailStatus.Initialize_Successfully.getCode();
   }
 
+  @Override
   public void open() throws MessagingException {
     Properties props = this.getProperties();
     this.session = Session.getDefaultInstance(props, null);
@@ -301,11 +302,7 @@ public class ReceiveMailImpl implements ReceiveMail {
     this.toFolder = this.openFolder(this.toFolderName, Folder.READ_ONLY);
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.java.mail.ReceiveMail#receive()
-   */
+  @Override
   public JSONArray receive(String messageId, boolean save) {
     JSONArray jsonArray = null;
     try {
@@ -342,6 +339,7 @@ public class ReceiveMailImpl implements ReceiveMail {
     return jsonArray;
   }
 
+  @Override
   public JSONArray receiveAttachment(String protocol, String messageId) {
     protocol = protocol.trim();
     JSONArray json = null;
@@ -363,6 +361,7 @@ public class ReceiveMailImpl implements ReceiveMail {
     return JSONArray.fromObject(mailMsg);
   }
 
+  @Override
   public JSONArray receiveViaEWS(String messageId, boolean save) {
     FolderId sourceFolderId = this.checkAndCreateEWSFolder(this.sourceFolderName);
 
@@ -571,6 +570,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    * 
    * @see com.java.mail.ReceiveMail#moveMessage(javax.mail.Message)
    */
+  @Override
   public int moveMessage(String protocol,String messageId) {
     int moveMsg = 100;
     protocol = protocol.trim();
@@ -619,6 +619,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    * 
    * @see com.java.mail.ReceiveMail#close()
    */
+  @Override
   public void close() {
     // close the folder, true means that will indeed to delete the message, false means that will not delete the message.
     this.closeFolder(this.sourceFolderName, true);
@@ -652,16 +653,6 @@ public class ReceiveMailImpl implements ReceiveMail {
       MailMessage mailMsg = new MailMessage();
       for (int i = 0; i < maxMailSize; i++) {
         MimeMessage msg = (MimeMessage) messages[i];
-        if (this.sourceFolder instanceof POP3Folder) {
-          POP3Folder pop3Folder = (POP3Folder) this.sourceFolder;
-          String uid = pop3Folder.getUID(msg);
-          mailMsg.setUid(uid);
-          mailMsg.setUsername(this.username);
-          // if the uid exists that means the mail has already been read. Jump to read next mail.
-          if (this.checkUIDExists(uid)) {
-            continue;
-          }
-        }
         mailMsg.setMsgId(msg.getMessageID());
         mailMsg.setContentType(msg.getContentType());
 
@@ -691,16 +682,6 @@ public class ReceiveMailImpl implements ReceiveMail {
       LOG.error(e.toString());
     }
     return msgList;
-  }
-
-  // TODO
-  private boolean checkUIDExists(String uid) {
-    // this.username;
-    boolean exist = false;
-    // result = select * from table where uid=, username=
-    // result.size>0 exist = true;
-    // else insert uid username into table; exist=fale;
-    return exist;
   }
 
   /**
@@ -1316,6 +1297,7 @@ public class ReceiveMailImpl implements ReceiveMail {
     return props;
   }
 
+  @Override
   public int deleteAttachments(String path) {
     File file = new File(path);
     if (file.isFile() && file.exists()) {
