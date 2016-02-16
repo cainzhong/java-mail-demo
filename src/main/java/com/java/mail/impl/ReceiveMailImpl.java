@@ -146,10 +146,6 @@ public class ReceiveMailImpl implements ReceiveMail {
 
   private String proxyPort;
 
-  private String proxyUser;
-
-  private String proxyPassword;
-
   private String sourceFolderName;
 
   private String toFolderName;
@@ -169,8 +165,6 @@ public class ReceiveMailImpl implements ReceiveMail {
   private static int maxattachmentcount;
 
   private ExchangeService service;
-
-  private String uri;
 
   static {
     // read the attachment segment size from configuration file, if it is null, set as default value.
@@ -195,11 +189,6 @@ public class ReceiveMailImpl implements ReceiveMail {
     }
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.java.mail.ReceiveMail#initialize(java.lang.String)
-   */
   @Override
   @SuppressWarnings("unchecked")
   public int initialize(String jsonParam) {
@@ -216,17 +205,15 @@ public class ReceiveMailImpl implements ReceiveMail {
       this.suffixList = (List<String>) map.get("suffixList");
       this.authorisedUserList = (List<String>) map.get("authorisedUserList");
       this.proxySet = (Boolean) map.get("proxySet");
-      if (this.protocol.equalsIgnoreCase("EWS")) {
+      if (!isNull(this.protocol) && this.protocol.equalsIgnoreCase("EWS")) {
         this.username = (String) map.get("username");
         this.password = (String) map.get("password");
-        this.uri = (String) map.get("uri");
         this.service = new ExchangeService();
 
         ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
         this.service.setCredentials(credentials);
         try {
           this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
-          // this.service.setUrl(new URI("https://outlook.office365.com/EWS/Exchange.asmx"));
         } catch (URISyntaxException e) {
           LOG.error(e.toString());
         } catch (Exception e) {
@@ -237,8 +224,6 @@ public class ReceiveMailImpl implements ReceiveMail {
           // For EWS proxy
           this.proxyHost = (String) map.get("proxyHost");
           this.proxyPort = (String) map.get("proxyPort");
-          this.proxyUser = (String) map.get("proxyUser");
-          this.proxyPassword = (String) map.get("proxyPassword");
           WebProxy proxy = new WebProxy(this.proxyHost, Integer.valueOf(this.proxyPort));
           this.service.setWebProxy(proxy);
         }
@@ -252,11 +237,9 @@ public class ReceiveMailImpl implements ReceiveMail {
       if (isNull(this.protocol)) {
         LOG.error("Missing mandatory values, please check that you have entered the protocol.");
         return MailStatus.Protocol_Missing.getCode();
-      } else if (this.protocol.equalsIgnoreCase("EWS")) {
-        if (isNull(this.username) || isNull(this.password)) {
-          LOG.error("Missing mandatory values, please check that you have entered the username, password or uri.");
-          return MailStatus.UP_Missing.getCode();
-        }
+      } else if (isNull(this.username) || isNull(this.password)) {
+        LOG.error("Missing mandatory values, please check that you have entered the username, password or uri.");
+        return MailStatus.UP_Missing.getCode();
       } else if (isNull(this.host) || isNull(this.port) || isNull(this.username) || isNull(this.password)) {
         LOG.error("Missing mandatory values, please check that you have entered the host, port, username or password.");
         return MailStatus.HPUP_Missing.getCode();
@@ -264,7 +247,7 @@ public class ReceiveMailImpl implements ReceiveMail {
         LOG.error("The user name is not belong to authorised user domain!");
         return MailStatus.Not_Authorised_User.getCode();
       } else {
-        if (this.maxMailQuantity == 0) {
+        if (this.maxMailQuantity <= 0) {
           this.maxMailQuantity = DEFAULT_MAX_MAIL_QUANTITY;
         }
         if (isNull(this.sourceFolderName)) {
@@ -274,6 +257,8 @@ public class ReceiveMailImpl implements ReceiveMail {
           this.toFolderName = DEFAULT_TO_FOLDER_NAME;
         }
       }
+    } else {
+      return MailStatus.Missing_Value.getCode();
     }
     return MailStatus.Initialize_Successfully.getCode();
   }
@@ -291,8 +276,6 @@ public class ReceiveMailImpl implements ReceiveMail {
 
     // Check the folder existing or not. If not, create a new folder.
     Folder defaultFolder = this.store.getDefaultFolder();
-    // String target_folder = "INBOX";
-    // Folder defaultFolder = this.store.getFolder(target_folder);
     this.checkAndCreateFolder(defaultFolder, this.sourceFolderName);
     this.checkAndCreateFolder(defaultFolder, this.toFolderName);
 
@@ -327,9 +310,9 @@ public class ReceiveMailImpl implements ReceiveMail {
         mailMsg.setMailStatus(MailStatus.No_Message);
         msgList.add(mailMsg);
       } else if (msgsLength > this.maxMailQuantity) {
-        msgList = this.processMsg(messages, this.maxMailQuantity, this.sourceFolder, this.toFolder, save);
+        msgList = this.processMsg(messages, this.maxMailQuantity, save);
       } else {
-        msgList = this.processMsg(messages, msgsLength, this.sourceFolder, this.toFolder, save);
+        msgList = this.processMsg(messages, msgsLength, save);
       }
       jsonArray = JSONArray.fromObject(msgList);
 
@@ -375,14 +358,8 @@ public class ReceiveMailImpl implements ReceiveMail {
         msgList.add(mailMsg);
       } else {
         ItemView view = new ItemView(this.maxMailQuantity);
-        // view.setPropertySet(new PropertySet(BasePropertySet.IdOnly, ItemSchema.Subject, ItemSchema.DateTimeReceived));
-        String fromStringTerm = "tao.zhong@hpe.com";
-        String subjectTerm = "Signed Mail with 2 attachments.";
-        // SearchFilter.ContainsSubstring fromTermFilter = new SearchFilter.ContainsSubstring(EmailMessageSchema.From, fromStringTerm);
-        // SearchFilter.ContainsSubstring subjectFilter = new SearchFilter.ContainsSubstring(ItemSchema.Subject, subjectTerm, ContainmentMode.Substring, ComparisonMode.IgnoreCase);
         SearchFilter filter = new SearchFilter.IsEqualTo(EmailMessageSchema.IsRead, false);
         FindItemsResults<Item> findResults = this.service.findItems(sourceFolderId, filter, view);
-        // FindItemsResults<Item> findResults = this.service.findItems(WellKnownFolderName.Inbox, new SearchFilter.SearchFilterCollection(LogicalOperator.And, fromTermFilter, subjectFilter), view);
         for (Item item : findResults) {
           MailMessage mailMsg = this.readEmailItem(item.getId(), save);
           msgList.add(mailMsg);
@@ -429,66 +406,80 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @throws SMIMEException
    * @throws MessagingException
    */
-  private void processEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) throws ServiceVersionException, IOException, CMSException, OperatorCreationException, CertificateException, SMIMEException, MessagingException {
-    if (fileAttachment.getContentType().equalsIgnoreCase("multipart/signed")) {
-      // DataSource source = new FileDataSource("C:/Users/zhontao/Desktop/smime.p7m");
-      String fileName = this.saveEWSAttachment(fileAttachment, mailMsg, mailAttachList);
-      DataSource source = new FileDataSource(fileName);
-      MimeMultipart multi1 = new MimeMultipart(source);
-      for (int i = 0; i < multi1.getCount(); i++) {
-        Part part1 = multi1.getBodyPart(i);
-        if (part1.getContent() instanceof Multipart) {
-          Multipart multi2 = (Multipart) part1.getContent();
-          for (int j = 0; j < multi2.getCount(); j++) {
-            Part part2 = multi2.getBodyPart(j);
-            String contentType = part2.getContentType();
-            // generally if the content type multipart/alternative, it is email text.
-            if (part2.isMimeType("multipart/alternative")) {
-              if (part2.getContent() instanceof Multipart) {
-                Multipart multi3 = (Multipart) part2.getContent();
-                for (int k = 0; k < multi3.getCount(); k++) {
-                  Part part4 = multi3.getBodyPart(k);
-                  String contentType1 = part4.getContentType();
-                  if (part4.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
-                    mailMsg.setTxtBody(part4.getContent().toString());
-                  } else if (part4.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
-                    mailMsg.setHtmlBody(part4.getContent().toString());
+  private void processEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) {
+    try {
+      if (fileAttachment.getContentType().equalsIgnoreCase("multipart/signed")) {
+        // DataSource source = new FileDataSource("C:/Users/zhontao/Desktop/smime.p7m");
+        String fileName = this.saveEWSAttachment(fileAttachment, mailMsg, mailAttachList);
+        DataSource source = new FileDataSource(fileName);
+        MimeMultipart multi1 = new MimeMultipart(source);
+        for (int i = 0; i < multi1.getCount(); i++) {
+          Part part1 = multi1.getBodyPart(i);
+          if (part1.getContent() instanceof Multipart) {
+            Multipart multi2 = (Multipart) part1.getContent();
+            for (int j = 0; j < multi2.getCount(); j++) {
+              Part part2 = multi2.getBodyPart(j);
+              String contentType = part2.getContentType();
+              // generally if the content type multipart/alternative, it is email text.
+              if (part2.isMimeType("multipart/alternative")) {
+                if (part2.getContent() instanceof Multipart) {
+                  Multipart multi3 = (Multipart) part2.getContent();
+                  for (int k = 0; k < multi3.getCount(); k++) {
+                    Part part4 = multi3.getBodyPart(k);
+                    String contentType1 = part4.getContentType();
+                    if (part4.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
+                      mailMsg.setTxtBody(part4.getContent().toString());
+                    } else if (part4.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
+                      mailMsg.setHtmlBody(part4.getContent().toString());
+                    }
                   }
                 }
+              } else {
+                this.processAttachment(part2, mailMsg, mailAttachList, true);
               }
-            } else {
-              this.processAttachment(part2, mailMsg, mailAttachList, true);
             }
+          } else {
+            this.processAttachment(part1, mailMsg, mailAttachList, true);
           }
-        } else {
-          this.processAttachment(part1, mailMsg, mailAttachList, true);
         }
+        SMIMESigned signedData = new SMIMESigned(multi1);
+        this.isValid(signedData, mailMsg);
+      } else {
+        this.saveEWSAttachment(fileAttachment, mailMsg, mailAttachList);
       }
-      SMIMESigned signedData = new SMIMESigned(multi1);
-      this.isValid(signedData, mailMsg);
-    } else {
-      this.saveEWSAttachment(fileAttachment, mailMsg, mailAttachList);
+    } catch (IOException e) {
+      LOG.error(e.toString());
+    } catch (MessagingException e) {
+      LOG.error(e.toString());
+    } catch (CMSException e) {
+      LOG.error(e.toString());
     }
   }
 
-  private String saveEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) throws ServiceVersionException, IOException {
+  private String saveEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) {
     // generate a new file name with unique UUID.
     String fileName = fileAttachment.getName();
-    UUID uuid = UUID.randomUUID();
-    String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
-    String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
-    if (this.suffixList.contains(suffix.toLowerCase()) || suffix.toLowerCase().equalsIgnoreCase("p7m")) {
-      String tempDir = System.getProperty("java.io.tmpdir");
-      fileName = tempDir + prefix + uuid + "." + suffix;
+    try {
+      UUID uuid = UUID.randomUUID();
+      String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
+      String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
+      if (this.suffixList.contains(suffix.toLowerCase()) || suffix.toLowerCase().equalsIgnoreCase("p7m")) {
+        String tempDir = System.getProperty("java.io.tmpdir");
+        fileName = tempDir + prefix + uuid + "." + suffix;
 
-      int fileSize = fileAttachment.getSize();
-      Attachment mailAttachment = new Attachment();
-      mailAttachment.setFileName(fileName);
-      mailAttachment.setFileType(suffix);
-      mailAttachment.setFileSize(fileSize);
-      mailAttachList.add(mailAttachment);
-      mailMsg.setAttachList(mailAttachList);
-      this.saveByteFile(fileName, fileAttachment.getContent(), fileSize);
+        int fileSize = fileAttachment.getSize();
+        Attachment mailAttachment = new Attachment();
+        mailAttachment.setFileName(fileName);
+        mailAttachment.setFileType(suffix);
+        mailAttachment.setFileSize(fileSize);
+        mailAttachList.add(mailAttachment);
+        mailMsg.setAttachList(mailAttachList);
+        this.saveByteFile(fileName, fileAttachment.getContent(), fileSize);
+      }
+    } catch (ServiceVersionException e) {
+      LOG.error(e.toString());
+    } catch (IOException e) {
+      LOG.error(e.toString());
     }
     return fileName;
   }
@@ -565,13 +556,8 @@ public class ReceiveMailImpl implements ReceiveMail {
     return mailMsg;
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.java.mail.ReceiveMail#moveMessage(javax.mail.Message)
-   */
   @Override
-  public int moveMessage(String protocol,String messageId) {
+  public int moveMessage(String protocol, String messageId) {
     int moveMsg = 100;
     protocol = protocol.trim();
     try {
@@ -614,11 +600,6 @@ public class ReceiveMailImpl implements ReceiveMail {
     return moveMsg;
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see com.java.mail.ReceiveMail#close()
-   */
   @Override
   public void close() {
     // close the folder, true means that will indeed to delete the message, false means that will not delete the message.
@@ -635,23 +616,15 @@ public class ReceiveMailImpl implements ReceiveMail {
    * Process message according to specified MIME type.
    * 
    * @param messages
-   * @param maxMailSize
-   * @param sourceFolder
-   * @param toFolderName
+   * @param msgsLength
+   * @param save
    * @return
-   * @throws MessagingException
-   * @throws IOException
-   * @throws OperatorCreationException
-   * @throws CMSException
-   * @throws UnknownMimeTypeException
-   * @throws CertificateException
-   * @throws InitializeException
    */
-  private List<MailMessage> processMsg(Message[] messages, int maxMailSize, Folder sourceFolder, Folder toFolder, boolean save) {
+  private List<MailMessage> processMsg(Message[] messages, int msgsLength, boolean save) {
     List<MailMessage> msgList = new ArrayList<MailMessage>();
     try {
       MailMessage mailMsg = new MailMessage();
-      for (int i = 0; i < maxMailSize; i++) {
+      for (int i = 0; i < msgsLength; i++) {
         MimeMessage msg = (MimeMessage) messages[i];
         mailMsg.setMsgId(msg.getMessageID());
         mailMsg.setContentType(msg.getContentType());
@@ -689,10 +662,8 @@ public class ReceiveMailImpl implements ReceiveMail {
    * 
    * @param msg
    * @param mailMsg
+   * @param save
    * @return
-   * @throws IOException
-   * @throws MessagingException
-   * @throws InitializeException
    */
   private MailMessage setMailMsgForSimpleMail(Message msg, MailMessage mailMsg, boolean save) {
     List<Attachment> attachList = new ArrayList<Attachment>();
@@ -742,10 +713,8 @@ public class ReceiveMailImpl implements ReceiveMail {
    * 
    * @param msg
    * @param mailMsg
+   * @param save
    * @return
-   * @throws IOException
-   * @throws MessagingException
-   * @throws InitializeException
    */
   private MailMessage setMailMsgForSignedMail(Message msg, MailMessage mailMsg, boolean save) {
     List<Attachment> attachList = new ArrayList<Attachment>();
@@ -831,14 +800,9 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @param msg
    * @param mailMsg
    * @return
-   * @throws MessagingException
-   * @throws CMSException
-   * @throws IOException
-   * @throws OperatorCreationException
-   * @throws CertificateException
    */
   private boolean validateSignedMail(Message msg, MailMessage mailMsg) {
-    boolean verify =false;
+    boolean verify = false;
     /*
      * Add a header to make a new message in order to fix the issue of Outlook
      * 
@@ -1072,9 +1036,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @param part
    * @param mailMsg
    * @param attachList
-   * @param excute
-   *          true indicates process the attachment and save it.
-   * @throws IOException
+   * @param save
    */
   private void processEmailBodyAttachment(Part part, MailMessage mailMsg, List<Attachment> attachList, boolean save) {
     try {
@@ -1160,9 +1122,9 @@ public class ReceiveMailImpl implements ReceiveMail {
   /**
    * check whether the user name is belong to authorised user domain or not.
    * 
+   * @param authorisedUserList
    * @param username
    * @return
-   * @throws Exception
    */
   private static boolean isAuthorisedUsername(List<String> authorisedUserList, String username) {
     if (authorisedUserList == null || authorisedUserList.isEmpty()) {
@@ -1219,7 +1181,6 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @param parent
    * @param folderName
    * @return
-   * @throws Exception
    */
   private boolean checkAndCreateFolder(Folder parent, String folderName) {
     boolean isCreated = false;
@@ -1308,3 +1269,4 @@ public class ReceiveMailImpl implements ReceiveMail {
     return MailStatus.Delete_Attachment_Successfully.getCode();
   }
 }
+
