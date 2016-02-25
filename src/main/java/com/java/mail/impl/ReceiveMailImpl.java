@@ -11,7 +11,12 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -183,13 +188,11 @@ public class ReceiveMailImpl implements ReceiveMail {
   }
 
   public static class RedirectionUrlCallback implements IAutodiscoverRedirectionUrl {
-    @Override
     public boolean autodiscoverRedirectionUrlValidationCallback(String redirectionUrl) {
       return redirectionUrl.toLowerCase().startsWith("https://");
     }
   }
 
-  @Override
   @SuppressWarnings("unchecked")
   public int initialize(String jsonParam) {
     JSONObject jsonObject = JSONObject.fromObject(jsonParam);
@@ -213,7 +216,8 @@ public class ReceiveMailImpl implements ReceiveMail {
         ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
         this.service.setCredentials(credentials);
         try {
-          this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
+          // this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
+          this.service.setUrl(new URI("https://outlook.office365.com/EWS/Exchange.asmx"));
         } catch (URISyntaxException e) {
           LOG.error(e.toString());
         } catch (Exception e) {
@@ -243,9 +247,9 @@ public class ReceiveMailImpl implements ReceiveMail {
       } else if (isNull(this.host) || isNull(this.port) || isNull(this.username) || isNull(this.password)) {
         LOG.error("Missing mandatory values, please check that you have entered the host, port, username or password.");
         return MailStatus.HPUP_Missing.getCode();
-      } else if (!isAuthorisedUsername(this.authorisedUserList, this.username)) {
-        LOG.error("The user name is not belong to authorised user domain!");
-        return MailStatus.Not_Authorised_User.getCode();
+        // } else if (!isAuthorisedUsername(this.authorisedUserList, this.username)) {
+        // LOG.error("The user name is not belong to authorised user domain!");
+        // return MailStatus.Not_Authorised_User.getCode();
       } else {
         if (this.maxMailQuantity <= 0) {
           this.maxMailQuantity = DEFAULT_MAX_MAIL_QUANTITY;
@@ -263,13 +267,11 @@ public class ReceiveMailImpl implements ReceiveMail {
     return MailStatus.Initialize_Successfully.getCode();
   }
 
-  @Override
   public void open() throws MessagingException {
     Properties props = this.getProperties();
     this.session = Session.getDefaultInstance(props, null);
     this.store = this.session.getStore(this.protocol);
     this.store.connect(this.host, this.username, this.password);
-
     this.profile = new FetchProfile();
     this.profile.add(UIDFolder.FetchProfileItem.UID);
     this.profile.add(FetchProfile.Item.ENVELOPE);
@@ -285,8 +287,8 @@ public class ReceiveMailImpl implements ReceiveMail {
     this.toFolder = this.openFolder(this.toFolderName, Folder.READ_ONLY);
   }
 
-  @Override
   public JSONArray receive(String messageId, boolean save) {
+    long begin = System.currentTimeMillis();
     JSONArray jsonArray = null;
     try {
       SearchTerm st;
@@ -295,7 +297,7 @@ public class ReceiveMailImpl implements ReceiveMail {
         st = new MessageIDTerm(messageId);
       } else {
         // Only receive new mails.
-        st = new FlagTerm(new Flags(Flags.Flag.RECENT), true);
+        st = new FlagTerm(new Flags(Flags.Flag.FLAGGED), true);
       }
       Message[] messages = this.sourceFolder.search(st);
 
@@ -319,11 +321,13 @@ public class ReceiveMailImpl implements ReceiveMail {
     } catch (MessagingException e) {
       LOG.error(e.toString());
     }
+    long end = System.currentTimeMillis();
+    System.out.println("Receive time: " + (end - begin) + " ms");
     return jsonArray;
   }
 
-  @Override
   public JSONArray receiveAttachment(String protocol, String messageId) {
+    long begin = System.currentTimeMillis();
     protocol = protocol.trim();
     JSONArray json = null;
     if (protocol.equalsIgnoreCase("pop3") || protocol.equalsIgnoreCase("pop3s") || protocol.equalsIgnoreCase("imap") || protocol.equalsIgnoreCase("imaps")) {
@@ -337,6 +341,8 @@ public class ReceiveMailImpl implements ReceiveMail {
       if (list != null && list.size() == 1) {
         mailMsg = list.get(0);
         mailMsg.setMailStatus(MailStatus.Receive_Attachment_Successfully);
+        long end = System.currentTimeMillis();
+        System.out.println("Receive attachment: " + (end - begin) / 1000 + " s");
         return JSONArray.fromObject(mailMsg);
       }
     }
@@ -344,8 +350,8 @@ public class ReceiveMailImpl implements ReceiveMail {
     return JSONArray.fromObject(mailMsg);
   }
 
-  @Override
   public JSONArray receiveViaEWS(String messageId, boolean save) {
+    long begin = System.currentTimeMillis();
     FolderId sourceFolderId = this.checkAndCreateEWSFolder(this.sourceFolderName);
 
     JSONArray jsonArray = null;
@@ -358,7 +364,7 @@ public class ReceiveMailImpl implements ReceiveMail {
         msgList.add(mailMsg);
       } else {
         ItemView view = new ItemView(this.maxMailQuantity);
-        SearchFilter filter = new SearchFilter.IsEqualTo(EmailMessageSchema.IsRead, false);
+        SearchFilter filter = new SearchFilter.IsEqualTo(EmailMessageSchema.IsRead, true);
         FindItemsResults<Item> findResults = this.service.findItems(sourceFolderId, filter, view);
         for (Item item : findResults) {
           MailMessage mailMsg = this.readEmailItem(item.getId(), save);
@@ -369,6 +375,8 @@ public class ReceiveMailImpl implements ReceiveMail {
     } catch (Exception e) {
       LOG.error(e.toString());
     }
+    long end = System.currentTimeMillis();
+    System.out.println("Receive EWS: " + (end - begin) / 1000 + " s");
     return jsonArray;
   }
 
@@ -556,7 +564,6 @@ public class ReceiveMailImpl implements ReceiveMail {
     return mailMsg;
   }
 
-  @Override
   public int moveMessage(String protocol, String messageId) {
     int moveMsg = 100;
     protocol = protocol.trim();
@@ -600,7 +607,6 @@ public class ReceiveMailImpl implements ReceiveMail {
     return moveMsg;
   }
 
-  @Override
   public void close() {
     // close the folder, true means that will indeed to delete the message, false means that will not delete the message.
     this.closeFolder(this.sourceFolderName, true);
@@ -623,8 +629,8 @@ public class ReceiveMailImpl implements ReceiveMail {
   private List<MailMessage> processMsg(Message[] messages, int msgsLength, boolean save) {
     List<MailMessage> msgList = new ArrayList<MailMessage>();
     try {
-      MailMessage mailMsg = new MailMessage();
       for (int i = 0; i < msgsLength; i++) {
+        MailMessage mailMsg = new MailMessage();
         MimeMessage msg = (MimeMessage) messages[i];
         mailMsg.setMsgId(msg.getMessageID());
         mailMsg.setContentType(msg.getContentType());
@@ -1079,16 +1085,17 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @throws IOException
    */
   private void saveFile(String fileName, InputStream in) throws IOException {
+    long begin = System.currentTimeMillis();
     File file = new File(fileName);
     if (!file.exists()) {
       OutputStream out = null;
       try {
-        out = new BufferedOutputStream(new FileOutputStream(file));
+        // out = new BufferedOutputStream(new FileOutputStream(file));
         in = new BufferedInputStream(in);
-        byte[] buf = new byte[BUFFSIZE];
+        byte[] buf = new byte[64 * 1024];
         int len;
         while ((len = in.read(buf)) > 0) {
-          out.write(buf, 0, len);
+          // out.write(buf, 0, len);
         }
       } catch (FileNotFoundException e) {
         LOG.error(e.toString());
@@ -1102,7 +1109,49 @@ public class ReceiveMailImpl implements ReceiveMail {
         }
       }
     }
+    long end = System.currentTimeMillis();
+    System.out.println("Save file: " + (end - begin));
   }
+
+  private void saveFile1(String fileName, InputStream in) throws IOException {
+    long begin = System.currentTimeMillis();
+    File file = new File(fileName);
+    OutputStream out = null;
+    if (!file.exists()) {
+      try {
+        ReadableByteChannel src = Channels.newChannel(in);
+        out = new BufferedOutputStream(new FileOutputStream(file));
+        WritableByteChannel dest = Channels.newChannel(out);
+        final ByteBuffer buffer = ByteBuffer.allocateDirect(16 * 1024);
+        while (src.read(buffer) != -1) {
+          // prepare the buffer to be drained
+          buffer.flip();
+          // write to the channel, may block
+          dest.write(buffer);
+          // If partial transfer, shift remainder down
+          // If buffer is empty, same as doing clear()
+          buffer.compact();
+        }
+        // EOF will leave buffer in fill state
+        buffer.flip();
+        // make sure the buffer is fully drained.
+        while (buffer.hasRemaining()) {
+          dest.write(buffer);
+        }
+      } finally {
+        // close streams
+        if (in != null) {
+          in.close();
+        }
+        if (out != null) {
+          out.close();
+        }
+      }
+    }
+    long end = System.currentTimeMillis();
+    System.out.println("Save file: " + (end - begin));
+  }
+
 
   /**
    * Check whether the given parameter is null or not.
@@ -1242,6 +1291,10 @@ public class ReceiveMailImpl implements ReceiveMail {
     props.put("mail.smtp.port", this.port);
     props.put("mail.smtp.auth", this.auth);
     props.put("mail.store.protocol", this.protocol);
+    props.put("mail.mime.base64.ignoreerrors", "true");
+    props.put("mail.imap.partialfetch", false);
+    props.put("mail.imaps.partialfetch", false);
+    props.put("mail.imap.fetchsize", "1048576");
     // Proxy
     if (this.proxySet) {
       props.put("proxySet", this.proxySet);
@@ -1258,7 +1311,6 @@ public class ReceiveMailImpl implements ReceiveMail {
     return props;
   }
 
-  @Override
   public int deleteAttachments(String path) {
     File file = new File(path);
     if (file.isFile() && file.exists()) {
