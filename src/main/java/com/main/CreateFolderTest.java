@@ -40,7 +40,7 @@ public class CreateFolderTest {
     boolean isCreated = true;
 
     try {
-      // parent.open(Folder.READ_WRITE); //根目录的时候不需要open,不是根目录，就要open
+      // parent.open(Folder.READ_WRITE);
       System.out.println("creating a folder ....");
       Folder newFolder = parent.getFolder(folderName);
 

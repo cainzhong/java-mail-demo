@@ -10,7 +10,7 @@ public enum MailStatus {
                       108), HPUP_Missing("Missing mandatory values, please check that you have entered the host, port, username or password.", 109), Not_Authorised_User(
                           "The user name is not belong to authorised user domain!", 110), Initialize_Successfully("Initialize successfully.",
                               111), Receive_Attachment_Successfully("Receive attachment successfully", 112), Fail_To_Receive_Attachment("Fail to receive attachment",
-                                  113), Delete_Attachment_Successfully("Delete attachment successfully", 114), Fail_To_Delete_Attachment("Fail to delete attachment", 115), OK("OK", 116), Missing_Value("Missing value", 117);
+                                  113), Delete_Attachment_Successfully("Delete attachment successfully", 114), Fail_To_Delete_Attachment("Fail to delete attachment", 115), OK("OK", 116), Missing_Value("May be the JSON Arguments is null", 117);
   private String desc;
   private int code;
   private MailStatus(String desc,int code){

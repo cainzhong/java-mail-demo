@@ -57,8 +57,9 @@ public class MoveTest {
     ReceiveMail receive = new ReceiveMailImpl();
     receive.initialize(paramJson);
     // receive.open();
-    // String messageId = "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";
+    // String messageId =
+    // "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";
     String messageId = "AAMkAGU4YmFmZDg3LWJmNzktNGFhYS05OWRmLWZmOGI4ZDc0MTRiMgBGAAAAAAB6fkMyFWApRKo+YfET7+zPBwCb6dlb7F5ESoU4htHysAseAAAAAAEMAACb6dlb7F5ESoU4htHysAseAAAIQ0HqAAA=";
-    System.out.println(receive.moveMessage("ews", messageId));
+    System.out.println(receive.moveMessage(messageId));
   }
 }

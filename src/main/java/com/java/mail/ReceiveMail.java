@@ -22,6 +22,14 @@ public interface ReceiveMail {
   public int initialize(String jsonParam);
 
   /**
+   * Get message id in mail box.
+   * 
+   * @return
+   * @throws Exception
+   */
+  public JSONArray getMsgIdList() throws Exception;
+
+  /**
    * Connect to the mail server.
    * 
    * @throws MessagingException
@@ -39,16 +47,6 @@ public interface ReceiveMail {
   public JSONArray receive(String messageId, boolean save);
 
   /**
-   * Receive mails via EWS(Exchange Web Service).
-   * 
-   * @param messageId
-   * @param save
-   *          true indicates the attachment will be saved
-   * @return
-   */
-  public JSONArray receiveViaEWS(String messageId, boolean save);
-
-  /**
    * Receive attachments of specific mail.
    * 
    * @param protocol
@@ -56,7 +54,7 @@ public interface ReceiveMail {
    * @param messageId
    * @return
    */
-  public JSONArray receiveAttachment(String protocol, String messageId);
+  public JSONArray receiveAttachment(String messageId);
 
   /**
    * Move a message to a specific folder.
@@ -66,7 +64,7 @@ public interface ReceiveMail {
    * @param messageId
    * @return
    */
-  public int moveMessage(String protocol, String messageId);
+  public int moveMessage(String messageId);
 
   /**
    * Close the connection to the mail server.
