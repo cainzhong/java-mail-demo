@@ -11,7 +11,7 @@ import com.java.mail.impl.ReceiveMailImpl;
 import net.sf.json.JSONArray;
 
 public class MoveTest {
-  public static void main(String args[]) {
+  public static void main(String args[]) throws Exception {
     // String sourceFolderName = "SmartEmail";
     String sourceFolderName = "收件箱";
     String toFolderName = "Deleted Itemsssss";
@@ -60,6 +60,5 @@ public class MoveTest {
     // String messageId =
     // "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";
     String messageId = "AAMkAGU4YmFmZDg3LWJmNzktNGFhYS05OWRmLWZmOGI4ZDc0MTRiMgBGAAAAAAB6fkMyFWApRKo+YfET7+zPBwCb6dlb7F5ESoU4htHysAseAAAAAAEMAACb6dlb7F5ESoU4htHysAseAAAIQ0HqAAA=";
-    System.out.println(receive.moveMessage(messageId));
   }
 }

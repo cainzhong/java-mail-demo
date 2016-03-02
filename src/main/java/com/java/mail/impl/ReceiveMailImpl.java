@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -97,7 +96,7 @@ public class ReceiveMailImpl implements ReceiveMail {
 
   private static final JLog LOG = new JLog(LogFactory.getLog(ReceiveMailImpl.class));
 
-  public static final int BUFFSIZE = 180;
+  public static final int BUFFSIZE = 64 * 1024;
 
   private static final String EXCHANGE_WEB_SERVICES = "EWS";
 
@@ -205,7 +204,7 @@ public class ReceiveMailImpl implements ReceiveMail {
 
   @Override
   @SuppressWarnings("unchecked")
-  public int initialize(String jsonParam) {
+  public void initialize(String jsonParam) throws Exception {
     JSONObject jsonObject = JSONObject.fromObject(jsonParam);
     Map<String, Object> map = MailUtil.convertJsonToMap(jsonObject);
     if (map != null && !map.isEmpty()) {
@@ -225,17 +224,21 @@ public class ReceiveMailImpl implements ReceiveMail {
       this.maxMailQuantity = (Integer) map.get("maxMailQuantity");
 
       if (isNull(this.protocol)) {
-        LOG.error("Missing mandatory values, please check that you have entered the protocol.");
-        return MailStatus.Protocol_Missing.getCode();
+        String e = "Missing mandatory values, please check that you have entered the protocol.";
+        LOG.error(e);
+        throw new Exception(e);
       } else if (isNull(this.username) || isNull(this.password)) {
-        LOG.error("Missing mandatory values, please check that you have entered the username, password.");
-        return MailStatus.UP_Missing.getCode();
+        String e = "Missing mandatory values, please check that you have entered the username, password.";
+        LOG.error(e);
+        throw new Exception(e);
       } else if (isNull(this.host) || isNull(this.port) || isNull(this.username) || isNull(this.password)) {
-        LOG.error("Missing mandatory values, please check that you have entered the host, port, username or password.");
-        return MailStatus.HPUP_Missing.getCode();
+        String e = "Missing mandatory values, please check that you have entered the host, port, username or password.";
+        LOG.error(e);
+        throw new Exception(e);
       } else if (!isAuthorisedUsername(this.authorisedUserList, this.username)) {
-        LOG.error("The user name is not belong to authorised user domain!");
-        return MailStatus.Not_Authorised_User.getCode();
+        String e = "The user name is not belong to authorised user domain.";
+        LOG.error(e);
+        throw new Exception(e);
       } else {
         if (isNull(this.sourceFolderName)) {
           this.sourceFolderName = DEFAULT_SOURCE_FOLDER_NAME;
@@ -248,36 +251,30 @@ public class ReceiveMailImpl implements ReceiveMail {
         }
       }
     } else {
-      return MailStatus.Missing_Value.getCode();
+      String e = "May be the JSON Arguments is null.";
+      LOG.error(e);
+      throw new Exception(e);
     }
-    return MailStatus.Initialize_Successfully.getCode();
+    LOG.info("Initialize successfully.");
   }
 
   @Override
-  public void open() throws MessagingException {
+  public void open() throws Exception {
     if (this.protocol.equalsIgnoreCase(EXCHANGE_WEB_SERVICES)) {
       // open connection for Exchange Web Services
-      if (!isNull(this.protocol) && this.protocol.equalsIgnoreCase("EWS")) {
-        this.service = new ExchangeService();
-        ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
-        this.service.setCredentials(credentials);
-        try {
-          if (isNull(this.uri)) {
-            this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
-          } else {
-            this.service.setUrl(new URI(this.uri));
-          }
-        } catch (URISyntaxException e) {
-          LOG.error(e.toString());
-        } catch (Exception e) {
-          LOG.error(e.toString());
-        }
-        this.service.setTraceEnabled(true);
-        if (this.proxySet) {
-          // For EWS proxy
-          WebProxy proxy = new WebProxy(this.proxyHost, Integer.valueOf(this.proxyPort));
-          this.service.setWebProxy(proxy);
-        }
+      this.service = new ExchangeService();
+      ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
+      this.service.setCredentials(credentials);
+      if (isNull(this.uri)) {
+        this.service.autodiscoverUrl(this.username, new RedirectionUrlCallback());
+      } else {
+        this.service.setUrl(new URI(this.uri));
+      }
+      this.service.setTraceEnabled(false);
+      if (this.proxySet) {
+        // For EWS proxy
+        WebProxy proxy = new WebProxy(this.proxyHost, Integer.valueOf(this.proxyPort));
+        this.service.setWebProxy(proxy);
       }
     } else {
       Properties props = this.getProperties();
@@ -563,59 +560,48 @@ public class ReceiveMailImpl implements ReceiveMail {
   }
 
   @Override
-  public int moveMessage(String messageId) {
-    int moveMsg = MailStatus.Fail_To_Move_Message.getCode();
-    try {
-      if (this.protocol.equalsIgnoreCase(POP3) || this.protocol.equalsIgnoreCase(POP3S) || this.protocol.equalsIgnoreCase(IMAP) || this.protocol.equalsIgnoreCase(IMAPS)) {
-        if ((this.sourceFolder != null && this.sourceFolder.isOpen()) && this.toFolder != null) {
-          // receive mails according to the message id.
-          SearchTerm st = new MessageIDTerm(messageId);
-          Message[] messages = this.sourceFolder.search(st);
-          Message msg = messages[0];
-          if (null != msg) {
-            Message[] needCopyMsgs = new Message[1];
-            needCopyMsgs[0] = msg;
-            // Copy the msg to the specific folder
-            this.sourceFolder.copyMessages(needCopyMsgs, this.toFolder);
-            // delete the original msg
-            // only add a delete flag on the message, it will not
-            // indeed to execute the delete operation.
-            msg.setFlag(Flags.Flag.DELETED, true);
-          } else {
-            moveMsg = MailStatus.No_Message.getCode();
-          }
+  public void moveMessage(String messageId) throws Exception {
+    if (this.protocol.equalsIgnoreCase(POP3) || this.protocol.equalsIgnoreCase(POP3S) || this.protocol.equalsIgnoreCase(IMAP) || this.protocol.equalsIgnoreCase(IMAPS)) {
+      if ((this.sourceFolder != null && this.sourceFolder.isOpen()) && this.toFolder != null) {
+        // receive mails according to the message id.
+        SearchTerm st = new MessageIDTerm(messageId);
+        Message[] messages = this.sourceFolder.search(st);
+        Message msg = messages[0];
+        if (null != msg) {
+          Message[] needCopyMsgs = new Message[1];
+          needCopyMsgs[0] = msg;
+          // Copy the msg to the specific folder
+          this.sourceFolder.copyMessages(needCopyMsgs, this.toFolder);
+          // delete the original msg
+          // only add a delete flag on the message, it will not
+          // indeed to execute the delete operation.
+          msg.setFlag(Flags.Flag.DELETED, true);
         } else {
-          moveMsg = MailStatus.Fail_To_Move_Message.getCode();
+          String e = "No message find.";
+          LOG.error(e);
+          throw new Exception(e);
         }
-      } else if (this.protocol.equalsIgnoreCase(EXCHANGE_WEB_SERVICES)) {
-        EmailMessage emailMessage = EmailMessage.bind(this.service, new ItemId(messageId));
-
-        FolderId folderId = this.checkAndCreateEWSFolder(this.toFolderName);
-        emailMessage.move(folderId);
-        moveMsg = MailStatus.Move_Message_Successfully.getCode();
       } else {
-        moveMsg = MailStatus.Fail_To_Move_Message.getCode();
+        String e = "The folder is null or closed.";
+        LOG.error(e);
+        throw new Exception(e);
       }
-    } catch (MessagingException e) {
-      LOG.error(e.toString());
-      moveMsg = MailStatus.Fail_To_Move_Message.getCode();
-    } catch (Exception e) {
-      LOG.error(e.toString());
-      moveMsg = MailStatus.Fail_To_Move_Message.getCode();
+    } else if (this.protocol.equalsIgnoreCase(EXCHANGE_WEB_SERVICES)) {
+      EmailMessage emailMessage = EmailMessage.bind(this.service, new ItemId(messageId));
+
+      FolderId folderId = this.checkAndCreateEWSFolder(this.toFolderName);
+      emailMessage.move(folderId);
     }
-    return moveMsg;
   }
 
   @Override
-  public void close() {
-    // close the folder, true means that will indeed to delete the message,
-    // false means that will not delete the message.
-    this.closeFolder(this.sourceFolderName, true);
-    this.closeFolder(this.toFolderName, true);
-    try {
+  public void close() throws MessagingException {
+    if (this.protocol.equalsIgnoreCase(POP3) || this.protocol.equalsIgnoreCase(POP3S) || this.protocol.equalsIgnoreCase(IMAP) || this.protocol.equalsIgnoreCase(IMAPS)) {
+      // close the folder, true means that will indeed to delete the message,
+      // false means that will not delete the message.
+      this.closeFolder(this.sourceFolderName, true);
+      this.closeFolder(this.toFolderName, true);
       this.store.close();
-    } catch (MessagingException e) {
-      LOG.error(e.toString());
     }
   }
 
@@ -1096,7 +1082,7 @@ public class ReceiveMailImpl implements ReceiveMail {
       try {
         out = new BufferedOutputStream(new FileOutputStream(file));
         in = new BufferedInputStream(in);
-        byte[] buf = new byte[64 * 1024];
+        byte[] buf = new byte[BUFFSIZE];
         int len;
         while ((len = in.read(buf)) > 0) {
           out.write(buf, 0, len);
@@ -1254,7 +1240,7 @@ public class ReceiveMailImpl implements ReceiveMail {
     Properties props = new Properties();
     props.put("mail.smtp.host", this.host);
     props.put("mail.smtp.port", this.port);
-    props.put("mail.smtp.auth", true);
+    props.put("mail.smtp.auth", "true");
     props.put("mail.store.protocol", this.protocol);
 
     props.put("mail.imap.partialfetch", "false");
@@ -1285,13 +1271,10 @@ public class ReceiveMailImpl implements ReceiveMail {
   }
 
   @Override
-  public int deleteAttachments(String path) {
+  public void deleteAttachments(String path) {
     File file = new File(path);
     if (file.isFile() && file.exists()) {
       file.delete();
-    } else {
-      return MailStatus.Fail_To_Delete_Attachment.getCode();
     }
-    return MailStatus.Delete_Attachment_Successfully.getCode();
   }
 }

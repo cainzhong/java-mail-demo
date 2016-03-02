@@ -28,7 +28,6 @@ import org.junit.Test;
 import com.hp.ov.sm.common.core.JLog;
 import com.java.mail.ReceiveMail;
 import com.java.mail.domain.MailMessage;
-import com.java.mail.domain.MailStatus;
 
 import net.sf.json.JSONArray;
 
@@ -44,7 +43,6 @@ public class ReceiveMailImplTest {
 
   private String subject;
 
-
   @Before
   public void setUp() {
     Properties props = new Properties();
@@ -55,7 +53,7 @@ public class ReceiveMailImplTest {
   }
 
   @Test
-  public void testInitializeSuccessfully() {
+  public void testInitializeSuccessfully() throws Exception {
     String sourceFolderName = "SmartEmail";
     String toFolderName = "Deleted Items";
 
@@ -89,19 +87,17 @@ public class ReceiveMailImplTest {
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(paramJson);
-    Assert.assertEquals(MailStatus.Initialize_Successfully.getCode(), code);
+    receive.initialize(paramJson);
   }
 
-  @Test
-  public void testInitializeMissingValue() {
+  @Test(expected = Exception.class)
+  public void testInitializeMissingValue() throws Exception {
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(null);
-    Assert.assertEquals(MailStatus.Missing_Value.getCode(), code);
+    receive.initialize(null);
   }
 
-  @Test
-  public void testInitializeProtocolMissing() {
+  @Test(expected = Exception.class)
+  public void testInitializeProtocolMissing() throws Exception {
     String sourceFolderName = "SmartEmail";
     String toFolderName = "Deleted Items";
 
@@ -134,12 +130,11 @@ public class ReceiveMailImplTest {
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(paramJson);
-    Assert.assertEquals(MailStatus.Protocol_Missing.getCode(), code);
+    receive.initialize(paramJson);
   }
 
-  @Test
-  public void testInitializeUPMissing() {
+  @Test(expected = Exception.class)
+  public void testInitializeUPMissing() throws Exception {
     String sourceFolderName = "SmartEmail";
     String toFolderName = "Deleted Items";
 
@@ -172,12 +167,11 @@ public class ReceiveMailImplTest {
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(paramJson);
-    Assert.assertEquals(MailStatus.UP_Missing.getCode(), code);
+    receive.initialize(paramJson);
   }
 
-  @Test
-  public void testInitializeHPUPMissing() {
+  @Test(expected = Exception.class)
+  public void testInitializeHPUPMissing() throws Exception {
     String sourceFolderName = "SmartEmail";
     String toFolderName = "Deleted Items";
 
@@ -210,12 +204,11 @@ public class ReceiveMailImplTest {
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(paramJson);
-    Assert.assertEquals(MailStatus.HPUP_Missing.getCode(), code);
+    receive.initialize(paramJson);
   }
 
-  @Test
-  public void testInitializeNotAuthorisedUser() {
+  @Test(expected = Exception.class)
+  public void testInitializeNotAuthorisedUser() throws Exception {
     String sourceFolderName = "SmartEmail";
     String toFolderName = "Deleted Items";
 
@@ -249,12 +242,11 @@ public class ReceiveMailImplTest {
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(paramJson);
-    Assert.assertEquals(MailStatus.Not_Authorised_User.getCode(), code);
+    receive.initialize(paramJson);
   }
 
   @Test
-  public void testInitializeMaxMailQuantity() {
+  public void testInitializeMaxMailQuantity() throws Exception {
     String sourceFolderName = "SmartEmail";
     String toFolderName = "Deleted Items";
 
@@ -288,12 +280,11 @@ public class ReceiveMailImplTest {
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(paramJson);
-    Assert.assertEquals(MailStatus.Initialize_Successfully.getCode(), code);
+    receive.initialize(paramJson);
   }
 
   @Test
-  public void testInitializeMaxMailQuantityy() {
+  public void testInitializeMaxMailQuantityy() throws Exception {
     String sourceFolderName = "SmartEmail";
     String toFolderName = "Deleted Items";
 
@@ -327,12 +318,11 @@ public class ReceiveMailImplTest {
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(paramJson);
-    Assert.assertEquals(MailStatus.Initialize_Successfully.getCode(), code);
+    receive.initialize(paramJson);
   }
 
   @Test
-  public void testInitializeNoSourceFolderName() {
+  public void testInitializeNoSourceFolderName() throws Exception {
     String sourceFolderName = "";
     String toFolderName = "Deleted Items";
 
@@ -366,12 +356,11 @@ public class ReceiveMailImplTest {
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(paramJson);
-    Assert.assertEquals(MailStatus.Initialize_Successfully.getCode(), code);
+    receive.initialize(paramJson);
   }
 
   @Test
-  public void testInitializeNoToFolderName() {
+  public void testInitializeNoToFolderName() throws Exception {
     String sourceFolderName = "SmartEmail";
     String toFolderName = "";
 
@@ -405,8 +394,7 @@ public class ReceiveMailImplTest {
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
     ReceiveMail receive = new ReceiveMailImpl();
-    int code = receive.initialize(paramJson);
-    Assert.assertEquals(MailStatus.Initialize_Successfully.getCode(), code);
+    receive.initialize(paramJson);
   }
 
   @Test

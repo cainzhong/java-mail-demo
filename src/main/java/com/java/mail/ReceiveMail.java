@@ -17,9 +17,9 @@ public interface ReceiveMail {
    * Initialize the incoming parameters, their format is JSON.
    * 
    * @param jsonParam
-   * @return error code
+   * @throws Exception
    */
-  public int initialize(String jsonParam);
+  public void initialize(String jsonParam) throws Exception;
 
   /**
    * Get message id in mail box.
@@ -32,9 +32,9 @@ public interface ReceiveMail {
   /**
    * Connect to the mail server.
    * 
-   * @throws MessagingException
+   * @throws Exception
    */
-  public void open() throws MessagingException;
+  public void open() throws Exception;
 
   /**
    * Receive mails via POP3, POP3S, IMAP, IMAPS.
@@ -49,8 +49,6 @@ public interface ReceiveMail {
   /**
    * Receive attachments of specific mail.
    * 
-   * @param protocol
-   *          POP3, POP3S, IMAP, IMAPS or EWS
    * @param messageId
    * @return
    */
@@ -59,18 +57,18 @@ public interface ReceiveMail {
   /**
    * Move a message to a specific folder.
    * 
-   * @param protocol
-   *          POP3, POP3S, IMAP, IMAPS or EWS
    * @param messageId
-   * @return
+   * @throws Exception
    */
-  public int moveMessage(String messageId);
+  public void moveMessage(String messageId) throws Exception;
 
   /**
    * Close the connection to the mail server.
    * 
+   * @throws MessagingException
+   * 
    */
-  public void close();
+  public void close() throws MessagingException;
 
   /**
    * Delete attachments.
@@ -78,5 +76,5 @@ public interface ReceiveMail {
    * @param path
    * @return
    */
-  public int deleteAttachments(String path);
+  public void deleteAttachments(String path);
 }
