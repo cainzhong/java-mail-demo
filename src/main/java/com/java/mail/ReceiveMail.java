@@ -43,16 +43,18 @@ public interface ReceiveMail {
    * @param save
    *          true indicates the attachment will be saved
    * @return
+   * @throws Exception
    */
-  public JSONArray receive(String messageId, boolean save);
+  public JSONArray receive(String messageId, boolean save) throws Exception;
 
   /**
    * Receive attachments of specific mail.
    * 
    * @param messageId
    * @return
+   * @throws Exception
    */
-  public JSONArray receiveAttachment(String messageId);
+  public JSONArray receiveAttachment(String messageId) throws Exception;
 
   /**
    * Move a message to a specific folder.

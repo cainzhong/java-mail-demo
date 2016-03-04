@@ -15,8 +15,6 @@ public class MailMessage {
 
   private String uid;
 
-  private String username;
-
   /* the address of email sender. */
   private List<MailAddress> from;
 
@@ -60,6 +58,8 @@ public class MailMessage {
 
   private Enum<MailStatus> mailStatus;
 
+  private String[] autoReply;
+
   public String getMsgId() {
     return this.msgId;
   }
@@ -74,14 +74,6 @@ public class MailMessage {
 
   public void setUid(String uid) {
     this.uid = uid;
-  }
-
-  public String getUsername() {
-    return this.username;
-  }
-
-  public void setUsername(String username) {
-    this.username = username;
   }
 
   public List<MailAddress> getFrom() {
@@ -202,5 +194,13 @@ public class MailMessage {
 
   public void setMailStatus(Enum<MailStatus> mailStatus) {
     this.mailStatus = mailStatus;
+  }
+
+  public String[] getAutoReply() {
+    return this.autoReply;
+  }
+
+  public void setAutoReply(String[] autoReply) {
+    this.autoReply = autoReply;
   }
 }
