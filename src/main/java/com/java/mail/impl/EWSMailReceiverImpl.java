@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import javax.activation.DataSource;
@@ -20,11 +21,14 @@ import javax.mail.Multipart;
 import javax.mail.Part;
 import javax.mail.internet.MimeMultipart;
 
+import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.mail.smime.SMIMEException;
 import org.bouncycastle.mail.smime.SMIMESigned;
 import org.bouncycastle.operator.OperatorCreationException;
 
+import com.hp.ov.sm.common.core.JLog;
+import com.java.mail.JSONUtil;
 import com.java.mail.domain.Attachment;
 import com.java.mail.domain.MailAddress;
 import com.java.mail.domain.MailMessage;
@@ -57,8 +61,10 @@ import microsoft.exchange.webservices.data.search.FolderView;
 import microsoft.exchange.webservices.data.search.ItemView;
 import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
 
 public class EWSMailReceiverImpl extends AbstractMailReceiver {
+  private static final JLog LOG = new JLog(LogFactory.getLog(EWSMailReceiverImpl.class));
 
   private ExchangeService service;
 
@@ -67,6 +73,51 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
     public boolean autodiscoverRedirectionUrlValidationCallback(String redirectionUrl) {
       return redirectionUrl.toLowerCase().startsWith("https://");
     }
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public void initialize(String jsonParam) throws Exception {
+    JSONObject jsonObject = JSONObject.fromObject(jsonParam);
+    Map<String, Object> map = JSONUtil.convertJsonToMap(jsonObject);
+    if (map != null && !map.isEmpty()) {
+      this.username = (String) map.get("username");
+      this.password = (String) map.get("password");
+      this.suffixList = (List<String>) map.get("suffixList");
+      this.authorisedUserList = (List<String>) map.get("authorisedUserList");
+      this.proxySet = (Boolean) map.get("proxySet");
+      this.proxyHost = (String) map.get("proxyHost");
+      this.proxyPort = (String) map.get("proxyPort");
+      this.sourceFolderName = (String) map.get("sourceFolderName");
+      this.toFolderName = (String) map.get("toFolderName");
+      this.uri = (String) map.get("uri");
+      this.maxMailQuantity = (Integer) map.get("maxMailQuantity");
+
+      if (isNull(this.username) || isNull(this.password)) {
+        String e = "Missing mandatory values, please check that you have entered the username, password.";
+        LOG.error(e);
+        throw new Exception(e);
+      } else if (!isAuthorisedUsername(this.authorisedUserList, this.username)) {
+        String e = "The user name is not belong to authorised user domain.";
+        LOG.error(e);
+        throw new Exception(e);
+      } else {
+        if (isNull(this.sourceFolderName)) {
+          this.sourceFolderName = DEFAULT_SOURCE_FOLDER_NAME;
+        }
+        if (isNull(this.toFolderName)) {
+          this.toFolderName = DEFAULT_TO_FOLDER_NAME;
+        }
+        if (this.maxMailQuantity <= 0) {
+          this.maxMailQuantity = DEFAULT_MAX_MAIL_QUANTITY;
+        }
+      }
+    } else {
+      String e = "May be the JSON Arguments is null.";
+      LOG.error(e);
+      throw new Exception(e);
+    }
+    LOG.info("Initialize successfully.");
   }
 
   @Override

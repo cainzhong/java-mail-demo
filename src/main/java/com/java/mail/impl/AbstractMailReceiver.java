@@ -60,11 +60,11 @@ public abstract class AbstractMailReceiver implements ReceiveMail {
   private static final int DEFAULT_ATTACHMENT_SEGMENT_SIZE = 512000;
 
   /* the default value of the maximum quantity for receiving mails during one time */
-  private static final int DEFAULT_MAX_MAIL_QUANTITY = 100;
+  protected static final int DEFAULT_MAX_MAIL_QUANTITY = 100;
 
-  private static final String DEFAULT_SOURCE_FOLDER_NAME = "INBOX";
+  protected static final String DEFAULT_SOURCE_FOLDER_NAME = "INBOX";
 
-  private static final String DEFAULT_TO_FOLDER_NAME = "Deleted Items";
+  protected static final String DEFAULT_TO_FOLDER_NAME = "Deleted Items";
 
   private static final String PROVIDER_NAME = "BC";
 
@@ -229,7 +229,7 @@ public abstract class AbstractMailReceiver implements ReceiveMail {
    * @param username
    * @return
    */
-  private static boolean isAuthorisedUsername(List<String> authorisedUserList, String username) {
+  protected static boolean isAuthorisedUsername(List<String> authorisedUserList, String username) {
     if (authorisedUserList == null || authorisedUserList.isEmpty()) {
       String msg = "The authorised user domain list is empty!";
       LOG.info(msg);
