@@ -55,7 +55,7 @@ import org.bouncycastle.operator.OperatorCreationException;
 
 import com.hp.ov.sm.common.core.Init;
 import com.hp.ov.sm.common.core.JLog;
-import com.java.mail.MailUtil;
+import com.java.mail.JSONUtil;
 import com.java.mail.ReceiveMail;
 import com.java.mail.domain.Attachment;
 import com.java.mail.domain.MailMessage;
@@ -95,23 +95,23 @@ import net.sf.json.JSONObject;
  * @author zhontao
  *
  */
-public class ReceiveMailImpl implements ReceiveMail {
+public abstract class ReveiveMailImpl implements ReceiveMail {
 
-  private static final JLog LOG = new JLog(LogFactory.getLog(ReceiveMailImpl.class));
+  private static final JLog LOG = new JLog(LogFactory.getLog(ReveiveMailImpl.class));
 
   public static final int BUFFSIZE = 64 * 1024;
 
   private static final String EXCHANGE_WEB_SERVICES = "EWS";
 
-  private static final String POP3 = "POP3";
+  protected static final String POP3 = "POP3";
 
-  private static final String POP3S = "POP3S";
+  protected static final String POP3S = "POP3S";
 
-  private static final String IMAP = "IMAP";
+  protected static final String IMAP = "IMAP";
 
-  private static final String IMAPS = "IMAPS";
+  protected static final String IMAPS = "IMAPS";
 
-  private static final String PROVIDER_NAME = "BC";
+  protected static final String PROVIDER_NAME = "BC";
 
   private static final int DEFAULT_MAX_ATTACHMENT_COUNT = 100;
 
@@ -203,7 +203,7 @@ public class ReceiveMailImpl implements ReceiveMail {
   @SuppressWarnings("unchecked")
   public void initialize(String jsonParam) throws Exception {
     JSONObject jsonObject = JSONObject.fromObject(jsonParam);
-    Map<String, Object> map = MailUtil.convertJsonToMap(jsonObject);
+    Map<String, Object> map = JSONUtil.convertJsonToMap(jsonObject);
     if (map != null && !map.isEmpty()) {
       this.host = (String) map.get("host");
       this.port = (String) map.get("port");
@@ -682,10 +682,10 @@ public class ReceiveMailImpl implements ReceiveMail {
     Date sendDate = emailMessage.getDateTimeCreated();
 
     mailMsg.setMsgId(messageId);
-    mailMsg.setFrom(MailUtil.convertToMailAddress(from));
-    mailMsg.setTo(MailUtil.convertToMailAddress(to));
-    mailMsg.setCc(MailUtil.convertToMailAddress(cc));
-    mailMsg.setBcc(MailUtil.convertToMailAddress(bcc));
+    mailMsg.setFrom(JSONUtil.convertToMailAddress(from));
+    mailMsg.setTo(JSONUtil.convertToMailAddress(to));
+    mailMsg.setCc(JSONUtil.convertToMailAddress(cc));
+    mailMsg.setBcc(JSONUtil.convertToMailAddress(bcc));
     mailMsg.setSubject(subject);
     mailMsg.setSendDate(sendDate);
   }
@@ -970,7 +970,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @return
    */
   @SuppressWarnings({ "rawtypes" })
-  private boolean isValid(CMSSignedData signedData, MailMessage mailMsg) {
+  protected boolean isValid(CMSSignedData signedData, MailMessage mailMsg) {
     boolean verify = false;
     try {
       SignerInformationStore signerStore = signedData.getSignerInfos();
@@ -1098,10 +1098,10 @@ public class ReceiveMailImpl implements ReceiveMail {
     String subject = msg.getSubject();
     Date sendDate = msg.getSentDate();
 
-    mailMsg.setFrom(MailUtil.convertToMailAddress(from));
-    mailMsg.setTo(MailUtil.convertToMailAddress(to));
-    mailMsg.setCc(MailUtil.convertToMailAddress(cc));
-    mailMsg.setBcc(MailUtil.convertToMailAddress(bcc));
+    mailMsg.setFrom(JSONUtil.convertToMailAddress(from));
+    mailMsg.setTo(JSONUtil.convertToMailAddress(to));
+    mailMsg.setCc(JSONUtil.convertToMailAddress(cc));
+    mailMsg.setBcc(JSONUtil.convertToMailAddress(bcc));
     mailMsg.setSubject(subject);
     mailMsg.setSendDate(sendDate);
   }
@@ -1154,7 +1154,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @throws MessagingException
    * @throws IOException
    */
-  private void processAttachment(Part part, MailMessage mailMsg, List<Attachment> attachList, boolean save) throws MessagingException, IOException {
+  protected void processAttachment(Part part, MailMessage mailMsg, List<Attachment> attachList, boolean save) throws MessagingException, IOException {
     String disposition = null;
     disposition = part.getDisposition();
     if ((disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition))) {
@@ -1295,7 +1295,7 @@ public class ReceiveMailImpl implements ReceiveMail {
    * @param msgSize
    * @return
    */
-  private boolean exceedMaxMsgSize(int msgSize) {
+  protected boolean exceedMaxMsgSize(int msgSize) {
     boolean exceedMaxMsgSize = false;
     if (msgSize > attachmentsegmentsize * maxattachmentcount) {
       exceedMaxMsgSize = true;

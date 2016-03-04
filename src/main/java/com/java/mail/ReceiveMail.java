@@ -22,19 +22,19 @@ public interface ReceiveMail {
   public void initialize(String jsonParam) throws Exception;
 
   /**
+   * Connect to the mail server.
+   * 
+   * @throws Exception
+   */
+  public void open() throws Exception;
+
+  /**
    * Get message id in mail box.
    * 
    * @return
    * @throws Exception
    */
   public JSONArray getMsgIdList() throws Exception;
-
-  /**
-   * Connect to the mail server.
-   * 
-   * @throws Exception
-   */
-  public void open() throws Exception;
 
   /**
    * Receive mails via POP3, POP3S, IMAP, IMAPS.

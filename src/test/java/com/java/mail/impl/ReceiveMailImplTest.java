@@ -86,13 +86,13 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(paramJson);
   }
 
   @Test(expected = Exception.class)
   public void testInitializeMissingValue() throws Exception {
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(null);
   }
 
@@ -129,7 +129,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(paramJson);
   }
 
@@ -166,7 +166,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(paramJson);
   }
 
@@ -203,7 +203,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(paramJson);
   }
 
@@ -241,7 +241,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(paramJson);
   }
 
@@ -279,7 +279,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(paramJson);
   }
 
@@ -317,7 +317,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(paramJson);
   }
 
@@ -355,7 +355,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(paramJson);
   }
 
@@ -393,7 +393,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new ReceiveMailImpl();
+    ReceiveMail receive = new AbstractMailReceiver();
     receive.initialize(paramJson);
   }
 
@@ -413,7 +413,7 @@ public class ReceiveMailImplTest {
       mimeMsg.saveChanges();
       Message[] messages = new MimeMessage[1];
       messages[0] = mimeMsg;
-      ReceiveMail receive = new ReceiveMailImpl();
+      ReceiveMail receive = new AbstractMailReceiver();
 
       Method processMsg = receive.getClass().getDeclaredMethod("processMsg", Message[].class, int.class, boolean.class);
       processMsg.setAccessible(true);
@@ -465,7 +465,7 @@ public class ReceiveMailImplTest {
       mimeMsg.saveChanges();
       Message[] messages = new MimeMessage[1];
       messages[0] = mimeMsg;
-      ReceiveMail receive = new ReceiveMailImpl();
+      ReceiveMail receive = new AbstractMailReceiver();
 
       Method processMsg = receive.getClass().getDeclaredMethod("processMsg", Message[].class, int.class, boolean.class);
       processMsg.setAccessible(true);
@@ -522,7 +522,7 @@ public class ReceiveMailImplTest {
       mimeMsg.saveChanges();
       Message[] messages = new MimeMessage[1];
       messages[0] = mimeMsg;
-      ReceiveMail receive = new ReceiveMailImpl();
+      ReceiveMail receive = new AbstractMailReceiver();
 
       Method processMsg = receive.getClass().getDeclaredMethod("processMsg", Message[].class, int.class, boolean.class);
       processMsg.setAccessible(true);
