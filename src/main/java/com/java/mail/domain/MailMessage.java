@@ -56,8 +56,6 @@ public class MailMessage {
   /* the type of a email message */
   private String contentType;
 
-  private Enum<MailStatus> mailStatus;
-
   private String[] autoReply;
 
   public String getMsgId() {
@@ -186,14 +184,6 @@ public class MailMessage {
 
   public void setContentType(String contentType) {
     this.contentType = contentType;
-  }
-
-  public Enum<MailStatus> getMailStatus() {
-    return this.mailStatus;
-  }
-
-  public void setMailStatus(Enum<MailStatus> mailStatus) {
-    this.mailStatus = mailStatus;
   }
 
   public String[] getAutoReply() {

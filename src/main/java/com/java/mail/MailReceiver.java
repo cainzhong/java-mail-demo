@@ -11,7 +11,7 @@ import net.sf.json.JSONArray;
  * @author zhontao
  *
  */
-public interface ReceiveMail {
+public interface MailReceiver {
 
   /**
    * Initialize the incoming parameters, their format is JSON.

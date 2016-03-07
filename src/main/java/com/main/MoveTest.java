@@ -5,8 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.java.mail.ReceiveMail;
-import com.java.mail.impl.AbstractMailReceiver;
+import com.java.mail.MailReceiver;
+import com.java.mail.impl.MailReceiverFactory;
 
 import net.sf.json.JSONArray;
 
@@ -54,7 +54,7 @@ public class MoveTest {
     JSONArray paramJsonArray = JSONArray.fromObject(paramMap);
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
-    ReceiveMail receive = new AbstractMailReceiver();
+    MailReceiver receive = new MailReceiverFactory().getInstance("EWS");
     receive.initialize(paramJson);
     // receive.open();
     // String messageId =

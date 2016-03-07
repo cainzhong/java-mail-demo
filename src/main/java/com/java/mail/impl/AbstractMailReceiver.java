@@ -25,6 +25,7 @@ import javax.mail.Multipart;
 import javax.mail.Part;
 import javax.mail.Session;
 import javax.mail.Store;
+import javax.mail.internet.MimeUtility;
 
 import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -39,10 +40,9 @@ import org.bouncycastle.operator.OperatorCreationException;
 import com.hp.ov.sm.common.core.Init;
 import com.hp.ov.sm.common.core.JLog;
 import com.java.mail.JSONUtil;
-import com.java.mail.ReceiveMail;
+import com.java.mail.MailReceiver;
 import com.java.mail.domain.Attachment;
 import com.java.mail.domain.MailMessage;
-import com.java.mail.domain.MailStatus;
 
 import net.sf.json.JSONObject;
 
@@ -50,7 +50,7 @@ import net.sf.json.JSONObject;
  * @author zhontao
  *
  */
-public abstract class AbstractMailReceiver implements ReceiveMail {
+public abstract class AbstractMailReceiver implements MailReceiver {
 
   private static final JLog LOG = new JLog(LogFactory.getLog(AbstractMailReceiver.class));
 
@@ -59,16 +59,16 @@ public abstract class AbstractMailReceiver implements ReceiveMail {
   /* Unit is bit */
   private static final int DEFAULT_ATTACHMENT_SEGMENT_SIZE = 512000;
 
+  private static final String PROVIDER_NAME = "BC";
+
+  private static final int BUFFSIZE = 64 * 1024;
+
   /* the default value of the maximum quantity for receiving mails during one time */
   protected static final int DEFAULT_MAX_MAIL_QUANTITY = 100;
 
   protected static final String DEFAULT_SOURCE_FOLDER_NAME = "INBOX";
 
   protected static final String DEFAULT_TO_FOLDER_NAME = "Deleted Items";
-
-  private static final String PROVIDER_NAME = "BC";
-
-  private static final int BUFFSIZE = 64 * 1024;
 
   protected static final String POP3 = "POP3";
 
@@ -248,35 +248,27 @@ public abstract class AbstractMailReceiver implements ReceiveMail {
    * @param signedData
    * @param mailMsg
    * @return
+   * @throws CMSException
+   * @throws OperatorCreationException
+   * @throws CertificateException
    */
   @SuppressWarnings({ "rawtypes" })
-  protected boolean isValid(CMSSignedData signedData, MailMessage mailMsg) {
+  protected boolean isValid(CMSSignedData signedData, MailMessage mailMsg) throws OperatorCreationException, CMSException, CertificateException {
     boolean verify = false;
-    try {
-      SignerInformationStore signerStore = signedData.getSignerInfos();
-      Iterator<SignerInformation> it = signerStore.getSigners().iterator();
-      while (it.hasNext()) {
-        SignerInformation signer = it.next();
-        org.bouncycastle.util.Store store = signedData.getCertificates();
-        @SuppressWarnings("unchecked")
-        Collection certCollection = store.getMatches(signer.getSID());
-        Iterator certIt = certCollection.iterator();
-        X509CertificateHolder certHolder = (X509CertificateHolder) certIt.next();
-        X509Certificate certificate = new JcaX509CertificateConverter().setProvider(PROVIDER_NAME).getCertificate(certHolder);
-        verify = signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(PROVIDER_NAME).build(certificate));
-        mailMsg.setHasSignature(true);
-        mailMsg.setSignaturePassed(verify);
-        mailMsg.setNameOfPrincipal(certificate.getSubjectDN().getName());
-      }
-    } catch (CertificateException e) {
-      mailMsg.setMailStatus(MailStatus.Certificate_Error);
-      LOG.error(e.toString());
-    } catch (OperatorCreationException e) {
-      mailMsg.setMailStatus(MailStatus.Certificate_Error);
-      LOG.error(e.toString());
-    } catch (CMSException e) {
-      mailMsg.setMailStatus(MailStatus.Certificate_Error);
-      LOG.error(e.toString());
+    SignerInformationStore signerStore = signedData.getSignerInfos();
+    Iterator<SignerInformation> it = signerStore.getSigners().iterator();
+    while (it.hasNext()) {
+      SignerInformation signer = it.next();
+      org.bouncycastle.util.Store store = signedData.getCertificates();
+      @SuppressWarnings("unchecked")
+      Collection certCollection = store.getMatches(signer.getSID());
+      Iterator certIt = certCollection.iterator();
+      X509CertificateHolder certHolder = (X509CertificateHolder) certIt.next();
+      X509Certificate certificate = new JcaX509CertificateConverter().setProvider(PROVIDER_NAME).getCertificate(certHolder);
+      verify = signer.verify(new JcaSimpleSignerInfoVerifierBuilder().setProvider(PROVIDER_NAME).build(certificate));
+      mailMsg.setHasSignature(true);
+      mailMsg.setSignaturePassed(verify);
+      mailMsg.setNameOfPrincipal(certificate.getSubjectDN().getName());
     }
     return verify;
   }
@@ -296,30 +288,64 @@ public abstract class AbstractMailReceiver implements ReceiveMail {
     String disposition = null;
     disposition = part.getDisposition();
     if ((disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition))) {
-      mailMsg.setHasAttachments(true);
-      if (save) {
-        // generate a new file name with unique UUID.
-        String fileName = part.getFileName();
-        UUID uuid = UUID.randomUUID();
-        String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
-        String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
-        if (this.suffixList.contains(suffix.toLowerCase())) {
-          String tempDir = System.getProperty("java.io.tmpdir");
-          fileName = tempDir + prefix + uuid + "." + suffix;
+      // generate a new file name with unique UUID.
+      String fileName = part.getFileName();
+      fileName = MimeUtility.decodeText(fileName);
 
-          int fileSize = part.getSize();
-          Attachment attachment = new Attachment();
-          attachment.setFileName(fileName);
-          attachment.setFileType(suffix);
-          attachment.setFileSize(fileSize);
-          attachList.add(attachment);
-          mailMsg.setAttachList(attachList);
-          this.saveFile(fileName, part.getInputStream());
-          mailMsg.setMailStatus(MailStatus.Receive_Attachment_Successfully);
-        } else {
-          LOG.info(fileName + " is not a supported file. Ignore this file.");
-        }
+      UUID uuid = UUID.randomUUID();
+      String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
+      String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
+      if (this.suffixList.contains(suffix.toLowerCase())) {
+        String tempDir = System.getProperty("java.io.tmpdir");
+        fileName = tempDir + prefix + uuid + "." + suffix;
+
+        int fileSize = part.getSize();
+        Attachment attachment = new Attachment();
+        attachment.setFileName(fileName);
+        attachment.setFileType(suffix);
+        attachment.setFileSize(fileSize);
+        attachList.add(attachment);
+        mailMsg.setHasAttachments(true);
+        mailMsg.setAttachList(attachList);
+        this.saveFile(fileName, part.getInputStream(), save);
+      } else {
+        LOG.info(fileName + " is not a supported file. Ignore this file.");
       }
+    }
+  }
+
+  /**
+   * Process attachments.
+   *
+   * @param part
+   * @param mailMsg
+   * @param attachList
+   * @param save
+   * @throws MessagingException
+   * @throws IOException
+   */
+  protected void processEmailBodyAttachment(Part part, MailMessage mailMsg, List<Attachment> attachList, boolean save) throws IOException, MessagingException {
+    // generate a new file name with unique UUID.
+    String fileName = part.getFileName();
+    fileName = MimeUtility.decodeText(fileName);
+    UUID uuid = UUID.randomUUID();
+    String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
+    String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
+    if (this.suffixList.contains(suffix.toLowerCase())) {
+      String tempDir = System.getProperty("java.io.tmpdir");
+      fileName = tempDir + "emailBody." + prefix + uuid + "." + suffix;
+
+      int fileSize = part.getSize();
+      Attachment attachment = new Attachment();
+      attachment.setFileName(fileName);
+      attachment.setFileType(suffix);
+      attachment.setFileSize(fileSize);
+      attachList.add(attachment);
+      mailMsg.setHasAttachments(true);
+      mailMsg.setAttachList(attachList);
+      this.saveFile(fileName, part.getInputStream(), save);
+    } else {
+      LOG.info(fileName + " is not a supported file. Ignore this file.");
     }
   }
 
@@ -328,27 +354,30 @@ public abstract class AbstractMailReceiver implements ReceiveMail {
    * 
    * @param fileName
    * @param in
+   * @param save
    * @throws IOException
    */
-  protected void saveFile(String fileName, InputStream in) throws IOException {
-    File file = new File(fileName);
-    if (!file.exists()) {
-      OutputStream out = null;
-      try {
-        out = new BufferedOutputStream(new FileOutputStream(file));
-        in = new BufferedInputStream(in);
-        byte[] buf = new byte[BUFFSIZE];
-        int len;
-        while ((len = in.read(buf)) > 0) {
-          out.write(buf, 0, len);
-        }
-      } finally {
-        // close streams
-        if (in != null) {
-          in.close();
-        }
-        if (out != null) {
-          out.close();
+  protected void saveFile(String fileName, InputStream in, boolean save) throws IOException {
+    if (save) {
+      File file = new File(fileName);
+      if (!file.exists()) {
+        OutputStream out = null;
+        try {
+          out = new BufferedOutputStream(new FileOutputStream(file));
+          in = new BufferedInputStream(in);
+          byte[] buf = new byte[BUFFSIZE];
+          int len;
+          while ((len = in.read(buf)) > 0) {
+            out.write(buf, 0, len);
+          }
+        } finally {
+          // close streams
+          if (in != null) {
+            in.close();
+          }
+          if (out != null) {
+            out.close();
+          }
         }
       }
     }

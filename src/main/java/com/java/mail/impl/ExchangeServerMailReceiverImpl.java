@@ -1,11 +1,11 @@
 package com.java.mail.impl;
 
 import java.io.IOException;
+import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
-import java.util.UUID;
 
 import javax.mail.Address;
 import javax.mail.FetchProfile;
@@ -27,12 +27,12 @@ import javax.mail.search.SearchTerm;
 import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.mail.smime.SMIMESigned;
+import org.bouncycastle.operator.OperatorCreationException;
 
 import com.hp.ov.sm.common.core.JLog;
 import com.java.mail.domain.Attachment;
 import com.java.mail.domain.MailAddress;
 import com.java.mail.domain.MailMessage;
-import com.java.mail.domain.MailStatus;
 
 import net.sf.json.JSONArray;
 
@@ -65,6 +65,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
 
   @Override
   public JSONArray getMsgIdList() throws Exception {
+    long begin = System.currentTimeMillis();
     JSONArray jsonArray = null;
     List<String> msgIdList = new ArrayList<String>();
 
@@ -77,11 +78,14 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       msgIdList.add(mmsg.getMessageID());
     }
     jsonArray = JSONArray.fromObject(msgIdList);
+    long end = System.currentTimeMillis();
+    System.out.println("getMsgIdList(): " + (end - begin) + " ms");
     return jsonArray;
   }
 
   @Override
   public JSONArray receive(String messageId, boolean save) throws Exception {
+    long begin = System.currentTimeMillis();
     JSONArray jsonArray = null;
     // receive mails according to the message id.
     SearchTerm st = new MessageIDTerm(messageId);
@@ -91,8 +95,10 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     mailMsg.setMsgId(messageId);
     Message msg = messages[0];
     this.getHeader(msg, mailMsg);
-    mailMsg = this.processMsg(msg, save);
+    mailMsg = this.processMsg(msg, mailMsg, save);
     jsonArray = JSONArray.fromObject(mailMsg);
+    long end = System.currentTimeMillis();
+    System.out.println("receive(): " + (end - begin) + " ms");
     return jsonArray;
   }
 
@@ -233,16 +239,26 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     String xAutoRespondHeaderName = "X-Autorespond";
     String xAutoSubmittedHeaderName = "auto-submitted";
 
-    String xAutoResponseSuppressVal = msg.getHeader(xAutoResponseSuppressHeaderName).toString();
-    String xAutoReplyVal = msg.getHeader(xAutoReplyHeaderName).toString();
-    String xAutoRespondVal = msg.getHeader(xAutoRespondHeaderName).toString();
-    String xAutoSubmittedVal = msg.getHeader(xAutoSubmittedHeaderName).toString();
+    String xAutoResponseSuppressVal = this.headerToString(msg.getHeader(xAutoResponseSuppressHeaderName));
+    String xAutoReplyVal = this.headerToString(msg.getHeader(xAutoReplyHeaderName));
+    String xAutoRespondVal = this.headerToString(msg.getHeader(xAutoRespondHeaderName));
+    String xAutoSubmittedVal = this.headerToString(msg.getHeader(xAutoSubmittedHeaderName));
     String contentType = msg.getContentType();
 
     // If any of those are present in an email, then that email is an auto-reply.
     String[] autoReplyArray = { xAutoResponseSuppressVal, xAutoReplyVal, xAutoRespondVal, xAutoSubmittedVal };
     mailMsg.setAutoReply(autoReplyArray);
     mailMsg.setContentType(contentType);
+  }
+
+  private String headerToString(String[] headerArray) {
+    String headerStr = "";
+    if (headerArray != null && headerArray.length > 0) {
+      for (String header : headerArray) {
+        headerStr = headerStr + header + ";";
+      }
+    }
+    return headerStr;
   }
 
   /**
@@ -254,10 +270,11 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
    * @throws MessagingException
    * @throws IOException
    * @throws CMSException
+   * @throws CertificateException
+   * @throws OperatorCreationException
    */
-  private MailMessage processMsg(Message message, boolean save) throws MessagingException, IOException, CMSException {
+  private MailMessage processMsg(Message message, MailMessage mailMsg, boolean save) throws MessagingException, IOException, CMSException, OperatorCreationException, CertificateException {
     MimeMessage msg = (MimeMessage) message;
-    MailMessage mailMsg = new MailMessage();
 
     if (msg.isMimeType("text/html") || msg.isMimeType("text/plain")) {
       // simple mail without attachment
@@ -270,13 +287,13 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       this.validateSignedMail(msg, mailMsg);
       this.setExchangeServerSignedMailForMailMsg(msg, mailMsg, save);
     } else if (msg.isMimeType("application/pkcs7-mime") || msg.isMimeType("application/x-pkcs7-mime")) {
-      mailMsg.setMailStatus(MailStatus.Encrypted_Mail);
       String e = "It's an encrypted mail. Can not handle the Message receiving from Mail Server.";
       LOG.error(e);
+      throw new MessagingException(e);
     } else {
-      mailMsg.setMailStatus(MailStatus.Unkonwn_MIME_Type);
       String e = "Unknown MIME Type | Message Content Type: " + msg.getContentType() + "Message Subject: " + msg.getSubject() + "Message Send Date: " + msg.getSentDate() + "Message From: " + msg.getFrom().toString();
       LOG.error(e);
+      throw new MessagingException(e);
     }
     return mailMsg;
   }
@@ -337,8 +354,10 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
    * @throws MessagingException
    * @throws IOException
    * @throws CMSException
+   * @throws CertificateException
+   * @throws OperatorCreationException
    */
-  private boolean validateSignedMail(Message msg, MailMessage mailMsg) throws MessagingException, CMSException, IOException {
+  private boolean validateSignedMail(Message msg, MailMessage mailMsg) throws MessagingException, CMSException, IOException, OperatorCreationException, CertificateException {
     boolean verify = false;
     /*
      * Add a header to make a new message in order to fix the issue of Outlook
@@ -416,7 +435,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
                   }
                 } else if (isValidMailMsg) {
                   // Process the attachment.
-                  this.processExchangeServerEmailBodyAttachment(part4, mailMsg, attachList, save);
+                  this.processEmailBodyAttachment(part4, mailMsg, attachList, save);
                 }
               }
             }
@@ -461,43 +480,6 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
   }
 
   /**
-   * Process attachments.
-   *
-   * @param part
-   * @param mailMsg
-   * @param attachList
-   * @param save
-   * @throws MessagingException
-   * @throws IOException
-   */
-  private void processExchangeServerEmailBodyAttachment(Part part, MailMessage mailMsg, List<Attachment> attachList, boolean save) throws IOException, MessagingException {
-    if (save) {
-      // generate a new file name with unique UUID.
-      String fileName = part.getFileName();
-      UUID uuid = UUID.randomUUID();
-      String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
-      String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
-      if (this.suffixList.contains(suffix.toLowerCase())) {
-        String tempDir = System.getProperty("java.io.tmpdir");
-        fileName = tempDir + "emailBody." + prefix + uuid + "." + suffix;
-
-        int fileSize = part.getSize();
-        Attachment attachment = new Attachment();
-        attachment.setFileName(fileName);
-        attachment.setFileType(suffix);
-        attachment.setFileSize(fileSize);
-        attachList.add(attachment);
-        mailMsg.setAttachList(attachList);
-        this.saveFile(fileName, part.getInputStream());
-      } else {
-        LOG.info(fileName + " is not a supported file. Ignore this file.");
-      }
-    } else {
-      mailMsg.setHasAttachments(true);
-    }
-  }
-
-  /**
    * Verify the mail's size and the attachments exceeding the maximum quantity.
    * 
    * @param multi
@@ -513,14 +495,12 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
 
     if (this.countMailAttachments(multi) > maxattachmentcount) {
       exceedMaxAttachmentCount = true;
-      mailMsg.setMailStatus(MailStatus.Invalid_Mail_Message);
       LOG.info("The attachments' quantity exceed the maximum value!");
     }
 
     int mailSize = this.countMailSize(multi, 0);
     if (mailSize > attachmentsegmentsize * maxattachmentcount) {
       exceedMaxMailSize = true;
-      mailMsg.setMailStatus(MailStatus.Invalid_Mail_Message);
       LOG.info("The size of all the attachments exceed the maximum value!");
     }
 

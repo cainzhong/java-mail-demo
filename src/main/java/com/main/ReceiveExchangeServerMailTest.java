@@ -9,8 +9,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.java.mail.ReceiveMail;
-import com.java.mail.impl.AbstractMailReceiver;
+import com.java.mail.MailReceiver;
+import com.java.mail.impl.MailReceiverFactory;
 
 import net.sf.json.JSONArray;
 
@@ -18,7 +18,7 @@ import net.sf.json.JSONArray;
  * @author zhontao
  *
  */
-public class ReceiveTest {
+public class ReceiveExchangeServerMailTest {
 
   public static void main(String args[]) {
     Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
@@ -31,21 +31,10 @@ public class ReceiveTest {
       Map<String, Object> paramMap = new HashMap<String, Object>();
       paramMap.put("host", "webmail.hp.com");
       paramMap.put("port", "995");
-      // paramMap.put("protocol", "imaps");
-      // paramMap.put("username", "tao.zhong@hpe.com");
-      // paramMap.put("password", "Cisco03#");
-      /* EWS */
-      // paramMap.put("protocol", "ews");
-      // paramMap.put("username", "cainzhong@cainzhong.win");
-      // paramMap.put("password", "Cisco01!");
-      // paramMap.put("uri", "https://outlook.office365.com/EWS/Exchange.asmx");
-      /* EWS */
-      /* EWS */
-      paramMap.put("protocol", "ews");
-      paramMap.put("username", "tao.zhong1@pactera.com");
-      paramMap.put("password", "Cisco01!");
-      paramMap.put("uri", "https://outlook.office365.com/EWS/Exchange.asmx");
-      /* EWS */
+      paramMap.put("protocol", "imaps");
+      paramMap.put("username", "tao.zhong@hpe.com");
+      paramMap.put("password", "Cisco03#");
+
       paramMap.put("maxMailQuantity", 100);
       List<String> suffixList = new ArrayList<String>();
       suffixList.add("css");
@@ -71,31 +60,60 @@ public class ReceiveTest {
       JSONArray paramJsonArray = JSONArray.fromObject(paramMap);
 
       String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
-      ReceiveMail receive = new AbstractMailReceiver();
+      MailReceiver receive = MailReceiverFactory.getInstance("Exchange Server");
       receive.initialize(paramJson);
       receive.open();
       String result = "";
       System.out.println("Get All message id.");
       String msgIdList = receive.getMsgIdList().toString();
       System.out.println("Message ID List: " + msgIdList);
+
       String autoReplay = "<e9659ef198fa49f99b7eac28363678fb@G9W3614.americas.hpqcorp.net>";
-      String noAttachment = "<5CAF9A738A54854FB156427742303E8501FA34@G4W3303.americas.hpqcorp.net>";
-      String size298MB = "<5CAF9A738A54854FB156427742303E8501FA19@G4W3303.americas.hpqcorp.net>";
+      String signedMailWithoutAttachment = "<5CAF9A738A54854FB156427742303E8501FA34@G4W3303.americas.hpqcorp.net>";
+      String simpleMailWithOne298MBAttachment = "<5CAF9A738A54854FB156427742303E8501FA19@G4W3303.americas.hpqcorp.net>";
+      String a1 = "<5CAF9A738A54854FB156427742303E8501FA03@G4W3303.americas.hpqcorp.net>";
+      String a2 = "<5CAF9A738A54854FB156427742303E8501F9E9@G4W3303.americas.hpqcorp.net>";
+      String a3 = "<5CAF9A738A54854FB156427742303E8501F9D2@G4W3303.americas.hpqcorp.net>";
+      String a4 = "<5CAF9A738A54854FB156427742303E8501F9B6@G4W3303.americas.hpqcorp.net>";
+      String a5 = "<5CAF9A738A54854FB156427742303E850446F4@G9W0749.americas.hpqcorp.net>";
+      String a6 = "<5CAF9A738A54854FB156427742303E85044714@G9W0749.americas.hpqcorp.net>";
+      String a7 = "<5CAF9A738A54854FB156427742303E85044731@G9W0749.americas.hpqcorp.net>";
+      String a8 = "<5CAF9A738A54854FB156427742303E85044781@G9W0749.americas.hpqcorp.net>";
 
-      String pacteraAutoReplay = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGtnIiAAA=";
-
-      // System.out.println("Exchange Server AutoReplay Mail");
-      // result = receive.receiveAttachment(autoReplay).toString();
-      System.out.println("Office 365 AutoReplay Mail");
-      result = receive.receiveAttachment(pacteraAutoReplay).toString();
+      System.out.println("Exchange Server AutoReplay Mail");
+      result = receive.receiveAttachment(autoReplay).toString();
       System.out.println(result);
-      // System.out.println("Signed Mail without attachment");
-      // result = receive.receiveAttachment(noAttachment).toString();
-      // System.out.println(result);
-      // System.out.println("Simple Mail with one 2.98MB attachment");
-      // result = receive.receiveAttachment(size298MB).toString();
-      // System.out.println(result);
-      receive.close();
+      System.out.println("Signed Mail without attachment");
+      result = receive.receiveAttachment(signedMailWithoutAttachment).toString();
+      System.out.println(result);
+      System.out.println("Simple Mail with one 2.98MB attachment");
+      result = receive.receiveAttachment(simpleMailWithOne298MBAttachment).toString();
+      System.out.println(result);
+
+      System.out.println("a1");
+      result = receive.receiveAttachment(a1).toString();
+      System.out.println(result);
+      System.out.println("a2");
+      result = receive.receiveAttachment(a2).toString();
+      System.out.println(result);
+      System.out.println("a3");
+      result = receive.receiveAttachment(a3).toString();
+      System.out.println(result);
+      System.out.println("a4");
+      result = receive.receiveAttachment(a4).toString();
+      System.out.println(result);
+      System.out.println("a5");
+      result = receive.receiveAttachment(a5).toString();
+      System.out.println(result);
+      System.out.println("a6");
+      result = receive.receiveAttachment(a6).toString();
+      System.out.println(result);
+      System.out.println("a7");
+      result = receive.receiveAttachment(a7).toString();
+      System.out.println(result);
+      System.out.println("a8");
+      result = receive.receiveAttachment(a8).toString();
+      System.out.println(result);
 
       // https://15.107.4.68/owa
       // String noAttachment = "<b2378546905c47ddb76006ccdaad2dbd@WIN-1M8HSSSE95N.smtest.com>";
@@ -122,6 +140,8 @@ public class ReceiveTest {
       // System.out.println(result3);
       // System.out.println(result4);
       // System.out.println(result5);
+
+      receive.close();
     } catch (Exception e) {
       e.printStackTrace();
     }
