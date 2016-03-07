@@ -9,8 +9,7 @@ import javax.mail.Store;
 public class MailConnectionTest {
 
   public static void main(String args[]) throws MessagingException {
-    // System.setProperty("javax.net.ssl.trustStore", "C:\\Program
-    // Files\\Java\\jdk1.7.0_79\\jre\\lib\\security\\cacerts");
+    // System.setProperty("javax.net.ssl.trustStore", "C:\\Program Files\\Java\\jdk1.7.0_79\\jre\\lib\\security\\cacerts");
     Properties props = System.getProperties();
     Session session = Session.getDefaultInstance(props, null);
     String protocol = "imaps";

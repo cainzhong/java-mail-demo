@@ -1,3 +1,6 @@
+/*
+ * (C) Copyright Hewlett-Packard Company, LP -  All Rights Reserved.
+ */
 package com.java.mail.impl;
 
 import java.io.BufferedOutputStream;
@@ -63,6 +66,10 @@ import microsoft.exchange.webservices.data.search.filter.SearchFilter;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
+/**
+ * @author zhontao
+ *
+ */
 public class EWSMailReceiverImpl extends AbstractMailReceiver {
   private static final JLog LOG = new JLog(LogFactory.getLog(EWSMailReceiverImpl.class));
 
@@ -141,6 +148,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
 
   @Override
   public JSONArray getMsgIdList() throws Exception {
+    long begin = System.currentTimeMillis();
     JSONArray jsonArray = null;
     List<String> msgIdList = new ArrayList<String>();
 
@@ -152,15 +160,20 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
     }
 
     jsonArray = JSONArray.fromObject(msgIdList);
+    long end = System.currentTimeMillis();
+    System.out.println("getMsgIdList(): " + (end - begin) + " ms");
     return jsonArray;
   }
 
   @Override
   public JSONArray receive(String messageId, boolean save) throws Exception {
+    long begin = System.currentTimeMillis();
     JSONArray jsonArray = null;
     ItemId itemId = new ItemId(messageId);
     MailMessage mailMsg = this.readEmailItem(itemId, save);
     jsonArray = JSONArray.fromObject(mailMsg);
+    long end = System.currentTimeMillis();
+    System.out.println("receive(): " + (end - begin) + " ms");
     return jsonArray;
   }
 
@@ -352,7 +365,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
    * @throws SMIMEException
    * @throws MessagingException
    */
-  private void processEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) throws MessagingException, IOException, CMSException, ServiceVersionException {
+  private void processEWSAttachment(FileAttachment fileAttachment, MailMessage mailMsg, List<Attachment> mailAttachList) throws MessagingException, IOException, CMSException, ServiceVersionException, OperatorCreationException, CertificateException {
     if ("multipart/signed".equalsIgnoreCase(fileAttachment.getContentType())) {
       String fileName = this.saveEWSAttachment(fileAttachment, mailMsg, mailAttachList);
       DataSource source = new FileDataSource(fileName);
@@ -364,6 +377,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
           for (int j = 0; j < multi2.getCount(); j++) {
             Part part2 = multi2.getBodyPart(j);
             // generally if the content type is multipart/alternative, it is email text.
+            System.out.println(part2.getContentType());
             if (part2.isMimeType("multipart/alternative")) {
               if (part2.getContent() instanceof Multipart) {
                 Multipart multi3 = (Multipart) part2.getContent();
@@ -373,6 +387,29 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
                     mailMsg.setTxtBody(part4.getContent().toString());
                   } else if (part4.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
                     mailMsg.setHtmlBody(part4.getContent().toString());
+                  }
+                }
+              }
+            } else if (part2.isMimeType("multipart/related")) {
+              if (part2.getContent() instanceof Multipart) {
+                Multipart multi3 = (Multipart) part2.getContent();
+                for (int m = 0; m < multi3.getCount(); m++) {
+                  Part part3 = multi3.getBodyPart(m);
+                  System.out.println(part3.getContentType());
+                  if (part3.isMimeType("multipart/alternative")) {
+                    if (part3.getContent() instanceof Multipart) {
+                      Multipart multi4 = (Multipart) part3.getContent();
+                      for (int p = 0; p < multi4.getCount(); p++) {
+                        Part part5 = multi4.getBodyPart(p);
+                        if (part5.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part5.getDisposition())) {
+                          mailMsg.setTxtBody(part5.getContent().toString());
+                        } else if (part5.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part5.getDisposition())) {
+                          mailMsg.setHtmlBody(part5.getContent().toString());
+                        }
+                      }
+                    }
+                  } else {
+                    this.processEmailBodyAttachment(part3, mailMsg, mailAttachList, true);
                   }
                 }
               }
@@ -386,6 +423,9 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
       }
       SMIMESigned signedData = new SMIMESigned(multi1);
       this.isValid(signedData, mailMsg);
+      if ("p7m".equalsIgnoreCase(fileName.substring(fileName.lastIndexOf(".") + 1))) {
+        // this.deleteAttachments(fileName);
+      }
     } else {
       this.saveEWSAttachment(fileAttachment, mailMsg, mailAttachList);
     }
@@ -407,7 +447,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
     UUID uuid = UUID.randomUUID();
     String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
     String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
-    if (this.suffixList.contains(suffix.toLowerCase()) || "p7m".equalsIgnoreCase(suffix.toLowerCase())) {
+    if (this.suffixList.contains(suffix.toLowerCase())) {
       String tempDir = System.getProperty("java.io.tmpdir");
       fileName = tempDir + prefix + uuid + "." + suffix;
 
@@ -418,6 +458,10 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
       mailAttachment.setFileSize(fileSize);
       mailAttachList.add(mailAttachment);
       mailMsg.setAttachList(mailAttachList);
+      this.saveByteFile(fileName, fileAttachment.getContent());
+    } else if ("p7m".equalsIgnoreCase(suffix.toLowerCase())) {
+      String tempDir = System.getProperty("java.io.tmpdir");
+      fileName = tempDir + prefix + uuid + "." + suffix;
       this.saveByteFile(fileName, fileAttachment.getContent());
     }
     return fileName;

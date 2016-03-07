@@ -31,9 +31,9 @@ import com.java.mail.domain.MailMessage;
 
 import net.sf.json.JSONArray;
 
-public class ReceiveMailImplTest {
+public class ExchangeServerMailReceiverImplTest {
 
-  private static final JLog LOG = new JLog(LogFactory.getLog(ReceiveMailImplTest.class));
+  private static final JLog LOG = new JLog(LogFactory.getLog(ExchangeServerMailReceiverImplTest.class));
 
   private Session sendMailSession;
 
@@ -86,13 +86,13 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(paramJson);
   }
 
   @Test(expected = Exception.class)
   public void testInitializeMissingValue() throws Exception {
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(null);
   }
 
@@ -129,7 +129,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(paramJson);
   }
 
@@ -166,7 +166,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(paramJson);
   }
 
@@ -203,7 +203,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(paramJson);
   }
 
@@ -241,7 +241,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(paramJson);
   }
 
@@ -279,7 +279,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(paramJson);
   }
 
@@ -317,7 +317,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(paramJson);
   }
 
@@ -355,7 +355,7 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(paramJson);
   }
 
@@ -393,12 +393,12 @@ public class ReceiveMailImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    ReceiveMail receive = new AbstractMailReceiver();
+    ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
     receive.initialize(paramJson);
   }
 
   @Test
-  public void testProcessMsgTextPlain() {
+  public void testProcessMsgTextPlain() throws Exception {
     try {
       Address from = new InternetAddress(this.fromAddress);
       Address to = new InternetAddress(this.toAddress);
@@ -413,7 +413,7 @@ public class ReceiveMailImplTest {
       mimeMsg.saveChanges();
       Message[] messages = new MimeMessage[1];
       messages[0] = mimeMsg;
-      ReceiveMail receive = new AbstractMailReceiver();
+      ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
 
       Method processMsg = receive.getClass().getDeclaredMethod("processMsg", Message[].class, int.class, boolean.class);
       processMsg.setAccessible(true);
@@ -444,7 +444,7 @@ public class ReceiveMailImplTest {
   }
 
   @Test
-  public void testProcessMsgHTML() {
+  public void testProcessMsgHTML() throws Exception {
     try {
       Address from = new InternetAddress(this.fromAddress);
       Address to = new InternetAddress(this.toAddress);
@@ -465,7 +465,7 @@ public class ReceiveMailImplTest {
       mimeMsg.saveChanges();
       Message[] messages = new MimeMessage[1];
       messages[0] = mimeMsg;
-      ReceiveMail receive = new AbstractMailReceiver();
+      ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
 
       Method processMsg = receive.getClass().getDeclaredMethod("processMsg", Message[].class, int.class, boolean.class);
       processMsg.setAccessible(true);
@@ -496,7 +496,7 @@ public class ReceiveMailImplTest {
   }
 
   @Test
-  public void testProcessMsgAttachment() {
+  public void testProcessMsgAttachment() throws Exception {
     try {
       Address from = new InternetAddress(this.fromAddress);
       Address to = new InternetAddress(this.toAddress);
@@ -522,7 +522,7 @@ public class ReceiveMailImplTest {
       mimeMsg.saveChanges();
       Message[] messages = new MimeMessage[1];
       messages[0] = mimeMsg;
-      ReceiveMail receive = new AbstractMailReceiver();
+      ReceiveMail receive = new ReceiveMailFactory().getInstance("EWS");
 
       Method processMsg = receive.getClass().getDeclaredMethod("processMsg", Message[].class, int.class, boolean.class);
       processMsg.setAccessible(true);
