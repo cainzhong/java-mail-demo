@@ -1,5 +1,7 @@
 package com.java.mail.impl;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
@@ -94,6 +96,12 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     MailMessage mailMsg = new MailMessage();
     mailMsg.setMsgId(messageId);
     Message msg = messages[0];
+
+    // TODO Save email as a file.
+    File saveFile = new File("c:/mail.eml");
+    msg.writeTo(new FileOutputStream(saveFile));
+    //
+
     this.getHeader(msg, mailMsg);
     mailMsg = this.processMsg(msg, mailMsg, save);
     jsonArray = JSONArray.fromObject(mailMsg);

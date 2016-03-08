@@ -49,6 +49,7 @@ import microsoft.exchange.webservices.data.core.exception.service.local.ServiceV
 import microsoft.exchange.webservices.data.core.service.item.EmailMessage;
 import microsoft.exchange.webservices.data.core.service.item.Item;
 import microsoft.exchange.webservices.data.core.service.schema.FolderSchema;
+import microsoft.exchange.webservices.data.core.service.schema.ItemSchema;
 import microsoft.exchange.webservices.data.credential.ExchangeCredentials;
 import microsoft.exchange.webservices.data.credential.WebCredentials;
 import microsoft.exchange.webservices.data.property.complex.EmailAddress;
@@ -57,6 +58,7 @@ import microsoft.exchange.webservices.data.property.complex.FileAttachment;
 import microsoft.exchange.webservices.data.property.complex.FolderId;
 import microsoft.exchange.webservices.data.property.complex.InternetMessageHeader;
 import microsoft.exchange.webservices.data.property.complex.ItemId;
+import microsoft.exchange.webservices.data.property.complex.MimeContent;
 import microsoft.exchange.webservices.data.property.definition.ExtendedPropertyDefinition;
 import microsoft.exchange.webservices.data.search.FindFoldersResults;
 import microsoft.exchange.webservices.data.search.FindItemsResults;
@@ -277,6 +279,15 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
   private MailMessage readEmailItem(ItemId itemId, boolean save) throws Exception {
     MailMessage mailMsg = new MailMessage();
     Item item = Item.bind(this.service, itemId, PropertySet.FirstClassProperties);
+
+    // TODO Save email as a file.
+    item.load(new PropertySet(ItemSchema.MimeContent));
+    MimeContent mc = item.getMimeContent();
+    FileOutputStream fs = new FileOutputStream("c:/test.eml");
+    fs.write(mc.getContent(), 0, mc.getContent().length);
+    fs.close();
+    //
+
     EmailMessage emailMessage = EmailMessage.bind(this.service, item.getId());
     this.getHeader(emailMessage, mailMsg);
     this.processEWSMsg(emailMessage, mailMsg, save);
@@ -377,7 +388,6 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
           for (int j = 0; j < multi2.getCount(); j++) {
             Part part2 = multi2.getBodyPart(j);
             // generally if the content type is multipart/alternative, it is email text.
-            System.out.println(part2.getContentType());
             if (part2.isMimeType("multipart/alternative")) {
               if (part2.getContent() instanceof Multipart) {
                 Multipart multi3 = (Multipart) part2.getContent();
@@ -395,7 +405,6 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
                 Multipart multi3 = (Multipart) part2.getContent();
                 for (int m = 0; m < multi3.getCount(); m++) {
                   Part part3 = multi3.getBodyPart(m);
-                  System.out.println(part3.getContentType());
                   if (part3.isMimeType("multipart/alternative")) {
                     if (part3.getContent() instanceof Multipart) {
                       Multipart multi4 = (Multipart) part3.getContent();
