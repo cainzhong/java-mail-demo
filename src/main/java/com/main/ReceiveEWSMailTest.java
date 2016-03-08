@@ -57,6 +57,7 @@ public class ReceiveEWSMailTest {
 
       String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
       MailReceiver receive = MailReceiverFactory.getInstance("EWS");
+
       receive.initialize(paramJson);
       receive.open();
       String result = "";

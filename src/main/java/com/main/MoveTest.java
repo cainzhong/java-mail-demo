@@ -54,7 +54,7 @@ public class MoveTest {
     JSONArray paramJsonArray = JSONArray.fromObject(paramMap);
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
-    MailReceiver receive = new MailReceiverFactory().getInstance("EWS");
+    MailReceiver receive = MailReceiverFactory.getInstance("EWS");
     receive.initialize(paramJson);
     // receive.open();
     // String messageId =
