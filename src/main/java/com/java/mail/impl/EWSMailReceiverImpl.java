@@ -185,6 +185,24 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
   }
 
   @Override
+  public String saveMessage(String messageId) throws Exception {
+    ItemId itemId = new ItemId(messageId);
+    Item item = Item.bind(this.service, itemId, PropertySet.FirstClassProperties);
+    String subject = item.getSubject();
+    item.load(new PropertySet(ItemSchema.MimeContent));
+    MimeContent mc = item.getMimeContent();
+
+    UUID uuid = UUID.randomUUID();
+    String tempDir = System.getProperty("java.io.tmpdir");
+    String fileName = tempDir + subject + uuid + "." + "eml";
+    FileOutputStream fs = new FileOutputStream(fileName);
+    fs.write(mc.getContent(), 0, mc.getContent().length);
+    fs.close();
+
+    return fileName;
+  }
+
+  @Override
   public void moveMessage(String messageId) throws Exception {
     EmailMessage emailMessage = EmailMessage.bind(this.service, new ItemId(messageId));
 
@@ -279,14 +297,6 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
   private MailMessage readEmailItem(ItemId itemId, boolean save) throws Exception {
     MailMessage mailMsg = new MailMessage();
     Item item = Item.bind(this.service, itemId, PropertySet.FirstClassProperties);
-
-    // TODO Save email as a file.
-    item.load(new PropertySet(ItemSchema.MimeContent));
-    MimeContent mc = item.getMimeContent();
-    FileOutputStream fs = new FileOutputStream("c:/test.eml");
-    fs.write(mc.getContent(), 0, mc.getContent().length);
-    fs.close();
-    //
 
     EmailMessage emailMessage = EmailMessage.bind(this.service, item.getId());
     this.getHeader(emailMessage, mailMsg);

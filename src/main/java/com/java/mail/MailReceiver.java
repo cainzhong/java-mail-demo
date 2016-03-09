@@ -57,6 +57,15 @@ public interface MailReceiver {
   public JSONArray receiveAttachment(String messageId) throws Exception;
 
   /**
+   * Save email message as an eml file.
+   * 
+   * @param messageId
+   * @return
+   * @throws Exception
+   */
+  public String saveMessage(String messageId) throws Exception;
+
+  /**
    * Move a message to a specific folder.
    * 
    * @param messageId
@@ -73,10 +82,10 @@ public interface MailReceiver {
   public void close() throws MessagingException;
 
   /**
-   * Delete attachments.
+   * Delete file such email message and email attachments.
    * 
    * @param path
    * @return
    */
-  public void deleteAttachments(String path);
+  public void deleteFile(String path);
 }

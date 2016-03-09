@@ -200,7 +200,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   }
 
   @Override
-  public void deleteAttachments(String path) {
+  public void deleteFile(String path) {
     File file = new File(path);
     if (file.isFile() && file.exists()) {
       file.delete();

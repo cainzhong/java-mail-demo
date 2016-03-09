@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
 
 import javax.mail.Address;
 import javax.mail.FetchProfile;
@@ -97,11 +98,6 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     mailMsg.setMsgId(messageId);
     Message msg = messages[0];
 
-    // TODO Save email as a file.
-    File saveFile = new File("c:/mail.eml");
-    msg.writeTo(new FileOutputStream(saveFile));
-    //
-
     this.getHeader(msg, mailMsg);
     mailMsg = this.processMsg(msg, mailMsg, save);
     jsonArray = JSONArray.fromObject(mailMsg);
@@ -113,6 +109,23 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
   @Override
   public JSONArray receiveAttachment(String messageId) throws Exception {
     return this.receive(messageId, true);
+  }
+
+  @Override
+  public String saveMessage(String messageId) throws Exception {
+    SearchTerm st = new MessageIDTerm(messageId);
+    Message[] messages = this.sourceFolder.search(st);
+    Message msg = messages[0];
+
+    UUID uuid = UUID.randomUUID();
+    String tempDir = System.getProperty("java.io.tmpdir");
+    String fileName = tempDir + msg.getSubject() + uuid + "." + "eml";
+    File saveFile = new File(fileName);
+    FileOutputStream fs = new FileOutputStream(saveFile);
+    msg.writeTo(fs);
+    fs.close();
+
+    return fileName;
   }
 
   @Override
