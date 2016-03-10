@@ -11,6 +11,7 @@ import java.util.Map;
 
 import com.java.mail.MailReceiver;
 import com.java.mail.impl.MailReceiverFactory;
+import com.java.mail.impl.MailReceiverFactoryImpl;
 
 import net.sf.json.JSONArray;
 
@@ -60,13 +61,15 @@ public class ReceiveExchangeServerMailTest {
       JSONArray paramJsonArray = JSONArray.fromObject(paramMap);
 
       String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
-      MailReceiver receive = MailReceiverFactory.getInstance("Exchange Server");
-      receive.initialize(paramJson);
-      receive.open();
+      MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+      MailReceiver receive = factory.create("Exchange Server");
+      receive.open(paramJson);
       String result = "";
       System.out.println("Get All message id.");
-      String msgIdList = receive.getMsgIdList().toString();
-      System.out.println("Message ID List: " + msgIdList);
+      // String msgIdList = receive.getNextMessageIdList("03/03/2016").toString();
+      // System.out.println("Message ID List: " + msgIdList);
+      String filePath = "C:/Users/zhontao/AppData/Local/Temp/Simple Mail with one 2.98MB attachment384ae9c0-dca7-4b6c-bd0b-1385e4d61f85.eml";
+      receive.readEmailBody(filePath, false);
 
       String autoReplay = "<e9659ef198fa49f99b7eac28363678fb@G9W3614.americas.hpqcorp.net>";
       String signedMailWithoutAttachment = "<5CAF9A738A54854FB156427742303E8501FA34@G4W3303.americas.hpqcorp.net>";
@@ -80,40 +83,40 @@ public class ReceiveExchangeServerMailTest {
       String a7 = "<5CAF9A738A54854FB156427742303E85044731@G9W0749.americas.hpqcorp.net>";
       String a8 = "<5CAF9A738A54854FB156427742303E85044781@G9W0749.americas.hpqcorp.net>";
 
-      System.out.println("Exchange Server AutoReplay Mail");
-      result = receive.receiveAttachment(autoReplay).toString();
-      System.out.println(result);
-      System.out.println("Signed Mail without attachment");
-      result = receive.receiveAttachment(signedMailWithoutAttachment).toString();
-      System.out.println(result);
-      System.out.println("Simple Mail with one 2.98MB attachment");
-      result = receive.receiveAttachment(simpleMailWithOne298MBAttachment).toString();
-      System.out.println(result);
+      // System.out.println("Exchange Server AutoReplay Mail");
+      // result = receive.receiveAttachment(autoReplay).toString();
+      // System.out.println(result);
+      // System.out.println("Signed Mail without attachment");
+      // result = receive.receiveAttachment(signedMailWithoutAttachment).toString();
+      // System.out.println(result);
+      // System.out.println("Simple Mail with one 2.98MB attachment");
+      // result = receive.receiveAttachment("aa").toString();
+      // System.out.println(result);
 
-      System.out.println("a1");
-      result = receive.receiveAttachment(a1).toString();
-      System.out.println(result);
-      System.out.println("a2");
-      result = receive.receiveAttachment(a2).toString();
-      System.out.println(result);
-      System.out.println("a3");
-      result = receive.receiveAttachment(a3).toString();
-      System.out.println(result);
-      System.out.println("a4");
-      result = receive.receiveAttachment(a4).toString();
-      System.out.println(result);
-      System.out.println("a5");
-      result = receive.receiveAttachment(a5).toString();
-      System.out.println(result);
-      System.out.println("a6");
-      result = receive.receiveAttachment(a6).toString();
-      System.out.println(result);
-      System.out.println("a7");
-      result = receive.receiveAttachment(a7).toString();
-      System.out.println(result);
-      System.out.println("a8");
-      result = receive.receiveAttachment(a8).toString();
-      System.out.println(result);
+      // System.out.println("a1");
+      // result = receive.receiveAttachment(a1).toString();
+      // System.out.println(result);
+      // System.out.println("a2");
+      // result = receive.receiveAttachment(a2).toString();
+      // System.out.println(result);
+      // System.out.println("a3");
+      // result = receive.receiveAttachment(a3).toString();
+      // System.out.println(result);
+      // System.out.println("a4");
+      // result = receive.receiveAttachment(a4).toString();
+      // System.out.println(result);
+      // System.out.println("a5");
+      // result = receive.receiveAttachment(a5).toString();
+      // System.out.println(result);
+      // System.out.println("a6");
+      // result = receive.receiveAttachment(a6).toString();
+      // System.out.println(result);
+      // System.out.println("a7");
+      // result = receive.receiveAttachment(a7).toString();
+      // System.out.println(result);
+      // System.out.println("a8");
+      // result = receive.receiveAttachment(a8).toString();
+      // System.out.println(result);
 
       // https://15.107.4.68/owa
       // String noAttachment = "<b2378546905c47ddb76006ccdaad2dbd@WIN-1M8HSSSE95N.smtest.com>";

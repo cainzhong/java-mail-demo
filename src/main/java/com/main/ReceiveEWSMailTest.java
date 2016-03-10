@@ -62,7 +62,7 @@ public class ReceiveEWSMailTest {
       receive.open();
       String result = "";
       System.out.println("Get All message id.");
-      String msgIdList = receive.getMsgIdList().toString();
+      String msgIdList = receive.getNextMessageIdList("03/03/2016").toString();
       System.out.println("Message ID List: " + msgIdList);
 
       String pacteraAutoReplay = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGtnIiAAA=";
@@ -84,9 +84,9 @@ public class ReceiveEWSMailTest {
       // result = receive.receiveAttachment(pacteraAutoReplay).toString();
       // System.out.println(result);
 
-      System.out.println("a1");
-      result = receive.receiveAttachment(a1).toString();
-      System.out.println(result);
+      // System.out.println("a1");
+      // result = receive.saveMessage(pacteraAutoReplay).toString();
+      // System.out.println(result);
       //
       // System.out.println("a2");
       // result = receive.receiveAttachment(a2).toString();

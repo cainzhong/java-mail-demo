@@ -3,9 +3,9 @@
  */
 package com.java.mail;
 
-import javax.mail.MessagingException;
+import java.text.ParseException;
 
-import net.sf.json.JSONArray;
+import javax.mail.MessagingException;
 
 /**
  * @author zhontao
@@ -14,59 +14,57 @@ import net.sf.json.JSONArray;
 public interface MailReceiver {
 
   /**
-   * Initialize the incoming parameters, their format is JSON.
+   * Connect to the mail server.
    * 
    * @param jsonParam
    * @throws Exception
    */
-  public void initialize(String jsonParam) throws Exception;
+  public void open(String jsonParam) throws Exception;
 
   /**
-   * Connect to the mail server.
+   * Get all message IDs great than or equal to the given date. But it is only support IMAP, IMAPS. For POP3 and POP3S, it will get all the messages in INBOX.
    * 
-   * @throws Exception
-   */
-  public void open() throws Exception;
-
-  /**
-   * Get message id in mail box.
-   * 
+   * @param date
+   *          the given date. format: MM/dd/yyyy
    * @return
+   * @throws MessagingException
+   * @throws ParseException
    * @throws Exception
    */
-  public JSONArray getMsgIdList() throws Exception;
+  public String getNextMessageIdList(String date) throws MessagingException, ParseException, Exception;
 
   /**
-   * Receive mails via POP3, POP3S, IMAP, IMAPS.
+   * Receive email message and save it as an eml file.
    * 
    * @param messageId
-   * @param save
-   *          true indicates the attachment will be saved
+   *          message id
    * @return
    * @throws Exception
    */
-  public JSONArray receive(String messageId, boolean save) throws Exception;
+  public String receive(String messageId) throws Exception;
 
   /**
-   * Receive attachments of specific mail.
+   * Read email message header and body of specific mail in this disk from the given filePath.
    * 
-   * @param messageId
+   * @param filePath
+   *          the given filePath
    * @return
    * @throws Exception
    */
-  public JSONArray receiveAttachment(String messageId) throws Exception;
+  public String readMessage(String filePath) throws Exception;
 
   /**
-   * Save email message as an eml file.
+   * Read attachments of specific mail in this disk from the given filePath.
    * 
-   * @param messageId
+   * @param filePath
+   *          the given filePath
    * @return
    * @throws Exception
    */
-  public String saveMessage(String messageId) throws Exception;
+  public String readEmailAttachments(String filePath) throws Exception;
 
   /**
-   * Move a message to a specific folder.
+   * Move a message to a specific folder. POP3 and POP3S do not support to move a message from a folder to another.
    * 
    * @param messageId
    * @throws Exception
@@ -80,12 +78,4 @@ public interface MailReceiver {
    * 
    */
   public void close() throws MessagingException;
-
-  /**
-   * Delete file such email message and email attachments.
-   * 
-   * @param path
-   * @return
-   */
-  public void deleteFile(String path);
 }
