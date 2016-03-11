@@ -40,4 +40,10 @@ public class Attachment {
   public void setFileSize(int fileSize) {
     this.fileSize = fileSize;
   }
+
+  @Override
+  public String toString() {
+    return "Attachment [fileName=" + this.fileName + ", fileType=" + this.fileType + ", fileSize=" + this.fileSize + "]";
+  }
+
 }

@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.net.URI;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -67,7 +68,6 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
   public void open(String jsonParam) throws Exception {
     this.initialize(jsonParam);
 
-    // open connection for Exchange Web Services
     this.service = new ExchangeService();
     ExchangeCredentials credentials = new WebCredentials(this.username, this.password);
     this.service.setCredentials(credentials);
@@ -85,8 +85,8 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
   }
 
   @Override
-  public String getNextMessageIdList(String date) throws Exception {
-    List<String[]> msgIdList = new ArrayList<String[]>();
+  public String getMsgIdList(String date) throws Exception {
+    List<String> msgIdList = new ArrayList<String>();
 
     SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
     Date receivedDate = sdf.parse(date);
@@ -105,7 +105,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
     for (Item item : findResults) {
       String receivedUTCDate = sdf.format(item.getDateTimeReceived());
       String[] header = { item.getId().toString(), receivedUTCDate };
-      msgIdList.add(header);
+      msgIdList.add(Arrays.toString(header));
     }
     return msgIdList.toString();
   }

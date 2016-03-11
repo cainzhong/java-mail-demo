@@ -31,7 +31,7 @@ public interface MailReceiver {
    * @throws ParseException
    * @throws Exception
    */
-  public String getNextMessageIdList(String date) throws MessagingException, ParseException, Exception;
+  public String getMsgIdList(String date) throws MessagingException, ParseException, Exception;
 
   /**
    * Receive email message and save it as an eml file.
@@ -61,7 +61,7 @@ public interface MailReceiver {
    * @return
    * @throws Exception
    */
-  public String readEmailAttachments(String filePath) throws Exception;
+  public String readAttachments(String filePath) throws Exception;
 
   /**
    * Move a message to a specific folder. POP3 and POP3S do not support to move a message from a folder to another.

@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.java.mail.MailReceiver;
 import com.java.mail.impl.MailReceiverFactory;
+import com.java.mail.impl.MailReceiverFactoryImpl;
 
 import net.sf.json.JSONArray;
 
@@ -54,8 +55,9 @@ public class MoveTest {
     JSONArray paramJsonArray = JSONArray.fromObject(paramMap);
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
-    MailReceiver receive = MailReceiverFactory.getInstance("EWS");
-    receive.initialize(paramJson);
+    MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+    MailReceiver receiver = factory.create("EWS");
+    receiver.open(paramJson);
     // receive.open();
     // String messageId =
     // "<5CAF9A738A54854FB156427742303E85020DF9@G4W3303.americas.hpqcorp.net>";

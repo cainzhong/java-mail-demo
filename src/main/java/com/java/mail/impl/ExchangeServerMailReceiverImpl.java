@@ -8,6 +8,7 @@ import java.io.FileOutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -73,8 +74,8 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
   }
 
   @Override
-  public String getNextMessageIdList(String date) throws MessagingException, ParseException {
-    List<String[]> msgIdList = new ArrayList<String[]>();
+  public String getMsgIdList(String date) throws MessagingException, ParseException {
+    List<String> msgIdList = new ArrayList<String>();
     SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
     Date receivedDate = sdf.parse(date);
 
@@ -98,7 +99,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       MimeMessage mmsg = (MimeMessage) msg;
       String receivedUTCDate = sdf.format(mmsg.getReceivedDate());
       String[] header = { mmsg.getMessageID(), receivedUTCDate };
-      msgIdList.add(header);
+      msgIdList.add(Arrays.toString(header));
     }
     return msgIdList.toString();
 
@@ -112,7 +113,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
 
     UUID uuid = UUID.randomUUID();
     String tempDir = System.getProperty("java.io.tmpdir");
-    String fileName = tempDir + uuid + ".eml";
+    String fileName = tempDir + "/temp/" + uuid + ".eml";
     File saveFile = new File(fileName);
     FileOutputStream fs = new FileOutputStream(saveFile);
     msg.writeTo(fs);
@@ -184,16 +185,8 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       this.uri = (String) map.get("uri");
       this.maxMailQuantity = (Integer) map.get("maxMailQuantity");
 
-      if (isNull(this.protocol)) {
-        String e = "Missing mandatory values, please check that you have entered the protocol.";
-        LOG.error(e);
-        throw new Exception(e);
-      } else if (isNull(this.username) || isNull(this.password)) {
-        String e = "Missing mandatory values, please check that you have entered the username or password.";
-        LOG.error(e);
-        throw new Exception(e);
-      } else if (isNull(this.host) || isNull(this.username) || isNull(this.password)) {
-        String e = "Missing mandatory values, please check that you have entered the host, username or password.";
+      if (isNull(this.protocol) || isNull(this.host) || isNull(this.username) || isNull(this.password)) {
+        String e = "Missing mandatory values, please check that you have entered the protocol, host, username or password.";
         LOG.error(e);
         throw new Exception(e);
       } else if (!isAuthorisedUsername(this.authorisedUserList, this.username)) {

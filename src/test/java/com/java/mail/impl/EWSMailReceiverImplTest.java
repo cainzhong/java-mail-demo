@@ -3,6 +3,7 @@
  */
 package com.java.mail.impl;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -43,14 +44,22 @@ public class EWSMailReceiverImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    MailReceiver receive = MailReceiverFactory.getInstance(INSTANCE_NAME);
-    receive.initialize(paramJson);
+    MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+    MailReceiver receive = factory.create(INSTANCE_NAME);
+
+    Method initialize = receive.getClass().getDeclaredMethod("initialize", String.class);
+    initialize.setAccessible(true);
+    initialize.invoke(receive, paramJson);
   }
 
   @Test(expected = Exception.class)
   public void testInitializeMissingValue() throws Exception {
-    MailReceiver receive = new ExchangeServerMailReceiverImpl();
-    receive.initialize(null);
+    MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+    MailReceiver receive = factory.create(INSTANCE_NAME);
+
+    Method initialize = receive.getClass().getDeclaredMethod("initialize", String.class);
+    initialize.setAccessible(true);
+    initialize.invoke(receive, "");
   }
 
   @Test(expected = Exception.class)
@@ -71,8 +80,12 @@ public class EWSMailReceiverImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    MailReceiver receive = MailReceiverFactory.getInstance(INSTANCE_NAME);
-    receive.initialize(paramJson);
+    MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+    MailReceiver receive = factory.create(INSTANCE_NAME);
+
+    Method initialize = receive.getClass().getDeclaredMethod("initialize", String.class);
+    initialize.setAccessible(true);
+    initialize.invoke(receive, paramJson);
   }
 
   @Test(expected = Exception.class)
@@ -94,8 +107,12 @@ public class EWSMailReceiverImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    MailReceiver receive = MailReceiverFactory.getInstance(INSTANCE_NAME);
-    receive.initialize(paramJson);
+    MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+    MailReceiver receive = factory.create(INSTANCE_NAME);
+
+    Method initialize = receive.getClass().getDeclaredMethod("initialize", String.class);
+    initialize.setAccessible(true);
+    initialize.invoke(receive, paramJson);
   }
 
   @Test
@@ -117,8 +134,12 @@ public class EWSMailReceiverImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    MailReceiver receive = MailReceiverFactory.getInstance(INSTANCE_NAME);
-    receive.initialize(paramJson);
+    MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+    MailReceiver receive = factory.create(INSTANCE_NAME);
+
+    Method initialize = receive.getClass().getDeclaredMethod("initialize", String.class);
+    initialize.setAccessible(true);
+    initialize.invoke(receive, paramJson);
   }
 
   @Test
@@ -140,8 +161,12 @@ public class EWSMailReceiverImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    MailReceiver receive = MailReceiverFactory.getInstance(INSTANCE_NAME);
-    receive.initialize(paramJson);
+    MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+    MailReceiver receive = factory.create(INSTANCE_NAME);
+
+    Method initialize = receive.getClass().getDeclaredMethod("initialize", String.class);
+    initialize.setAccessible(true);
+    initialize.invoke(receive, paramJson);
   }
 
   @Test
@@ -163,7 +188,11 @@ public class EWSMailReceiverImplTest {
 
     String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
 
-    MailReceiver receive = MailReceiverFactory.getInstance(INSTANCE_NAME);
-    receive.initialize(paramJson);
+    MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+    MailReceiver receive = factory.create(INSTANCE_NAME);
+
+    Method initialize = receive.getClass().getDeclaredMethod("initialize", String.class);
+    initialize.setAccessible(true);
+    initialize.invoke(receive, paramJson);
   }
 }

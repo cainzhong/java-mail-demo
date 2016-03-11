@@ -11,6 +11,7 @@ import java.util.Map;
 
 import com.java.mail.MailReceiver;
 import com.java.mail.impl.MailReceiverFactory;
+import com.java.mail.impl.MailReceiverFactoryImpl;
 
 import net.sf.json.JSONArray;
 
@@ -56,83 +57,70 @@ public class ReceiveEWSMailTest {
       JSONArray paramJsonArray = JSONArray.fromObject(paramMap);
 
       String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
-      MailReceiver receive = MailReceiverFactory.getInstance("EWS");
-
-      receive.initialize(paramJson);
-      receive.open();
+      MailReceiverFactory factory = MailReceiverFactoryImpl.getInstance();
+      MailReceiver receiver = factory.create("EWS");
+      receiver.open(paramJson);
       String result = "";
-      System.out.println("Get All message id.");
-      String msgIdList = receive.getNextMessageIdList("03/03/2016").toString();
-      System.out.println("Message ID List: " + msgIdList);
+      // System.out.println("Get All message id.");
+      // String msgIdList = receiver.getMsgIdList("03/03/2016").toString();
+      // System.out.println("Message ID List: " + msgIdList);
 
-      String pacteraAutoReplay = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGtnIiAAA=";
+      String a1 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZxAAA=";
+      String a2 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZwAAA=";
+      String a3 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZuAAA=";
+      String a4 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZtAAA=";
+      String a5 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZvAAA=";
+      String a6 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZsAAA=";
+      String a7 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZrAAA=";
+      String a8 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZqAAA=";
+      String a9 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZpAAA=";
+      String a10 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZoAAA=";
+      String a11 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZnAAA=";
+      String a12 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZmAAA=";
+      String a13 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGtnIiAAA=";
 
-      String a1 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZwAAA=";
-      String a2 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZuAAA=";
-      String a3 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZtAAA=";
-      String a4 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZvAAA=";
-      String a5 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZsAAA=";
-      String a6 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZrAAA=";
-      String a7 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZqAAA=";
-      String a8 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZpAAA=";
-      String a9 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZoAAA=";
-      String a10 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZnAAA=";
-      String a11 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZmAAA=";
-      String a12 = "AAMkAGQ3ZTFkMzNiLWZlMjQtNDc5Mi1iYWE4LWJlZDBlYWI4NzZkOABGAAAAAACvYXplambMRroXkSScSrxlBwC+v4q/kn/NQqjU3NR5Sn1UAABGtkcnAAC+v4q/kn/NQqjU3NR5Sn1UAABGvWZxAAA=";
+      // Receive mail from mail server and save them in the disk.
+      System.out.println("a1");
+      result = receiver.receive(a1).toString();
+      System.out.println(result);
+      System.out.println("a2");
+      result = receiver.receive(a2).toString();
+      System.out.println(result);
+      System.out.println("a3");
+      result = receiver.receive(a3).toString();
+      System.out.println(result);
+      System.out.println("a4");
+      result = receiver.receive(a4).toString();
+      System.out.println(result);
+      System.out.println("a5");
+      result = receiver.receive(a5).toString();
+      System.out.println(result);
+      System.out.println("a6");
+      result = receiver.receive(a6).toString();
+      System.out.println(result);
+      System.out.println("a7");
+      result = receiver.receive(a7).toString();
+      System.out.println(result);
+      System.out.println("a8");
+      result = receiver.receive(a8).toString();
+      System.out.println(result);
+      System.out.println("a9");
+      result = receiver.receive(a9).toString();
+      System.out.println(result);
+      System.out.println("a10");
+      result = receiver.receive(a10).toString();
+      System.out.println(result);
+      System.out.println("a11");
+      result = receiver.receive(a11).toString();
+      System.out.println(result);
+      System.out.println("a12");
+      result = receiver.receive(a12).toString();
+      System.out.println(result);
+      System.out.println("a13");
+      result = receiver.receive(a13).toString();
+      System.out.println(result);
 
-      // System.out.println("Office 365 AutoReplay Mail");
-      // result = receive.receiveAttachment(pacteraAutoReplay).toString();
-      // System.out.println(result);
-
-      // System.out.println("a1");
-      // result = receive.saveMessage(pacteraAutoReplay).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a2");
-      // result = receive.receiveAttachment(a2).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a3");
-      // result = receive.receiveAttachment(a3).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a4");
-      // result = receive.receiveAttachment(a4).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a5");
-      // result = receive.receiveAttachment(a5).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a6");
-      // result = receive.receiveAttachment(a6).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a7");
-      // result = receive.receiveAttachment(a7).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a8");
-      // result = receive.receiveAttachment(a8).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a9");
-      // result = receive.receiveAttachment(a9).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a10");
-      // result = receive.receiveAttachment(a10).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a11");
-      // result = receive.receiveAttachment(a11).toString();
-      // System.out.println(result);
-      //
-      // System.out.println("a12");
-      // result = receive.receiveAttachment(a12).toString();
-      // System.out.println(result);
-
-      receive.close();
+      receiver.close();
     } catch (Exception e) {
       e.printStackTrace();
     }

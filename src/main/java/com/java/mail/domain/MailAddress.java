@@ -8,23 +8,23 @@ package com.java.mail.domain;
  *
  */
 public class MailAddress {
-	private String address;
+  private String address;
 
-	private String Name;
+  private String Name;
 
-	public String getAddress() {
-		return this.address;
-	}
+  public String getAddress() {
+    return this.address;
+  }
 
-	public void setAddress(String address) {
-		this.address = address;
-	}
+  public void setAddress(String address) {
+    this.address = address;
+  }
 
-	public String getName() {
-		return this.Name;
-	}
+  public String getName() {
+    return this.Name;
+  }
 
-	public void setName(String name) {
-		this.Name = name;
-	}
+  public void setName(String name) {
+    this.Name = name;
+  }
 }

@@ -15,6 +15,7 @@ import java.io.OutputStream;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
@@ -161,7 +162,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   }
 
   @Override
-  public String readEmailAttachments(String filePath) throws Exception {
+  public String readAttachments(String filePath) throws Exception {
     MailMessage mailMsg = new MailMessage();
     MimeMessage mime = this.readEMLToMessage(filePath);
     return this.processMsg(mime, mailMsg, true);
@@ -196,7 +197,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    */
   protected String processMsg(MimeMessage mime, MailMessage mailMsg, boolean save) throws MessagingException, IOException, CMSException, OperatorCreationException, CertificateException {
     System.out.println("Size" + mime.getSize());
-    String message;
+    String message = null;
     if (!this.exceedMaxMsgSize(mime.getSize())) {
       if (mime.isMimeType("text/html") || mime.isMimeType("text/plain") || mime.isMimeType("multipart/mixed")) {
         // simple mail without/with attachment
@@ -344,7 +345,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * @throws MessagingException
    * @throws IOException
    */
-  private MailMessage processSignedMail(MimeMessage mime, MailMessage mailMsg, boolean save) throws IOException, MessagingException {
+  private String processSignedMail(MimeMessage mime, MailMessage mailMsg, boolean save) throws IOException, MessagingException {
     List<Attachment> attachList = new ArrayList<Attachment>();
 
     this.setMailBasicInfoForMailMsg(mime, mailMsg, save);
@@ -363,8 +364,12 @@ public abstract class AbstractMailReceiver implements MailReceiver {
         // process the content in multi2.
         for (int j = 0; j < multi2.getCount(); j++) {
           Part part3 = multi2.getBodyPart(j);
-          // generally if the content type multipart/alternative, it is email text.
-          if (!save && part3.isMimeType("multipart/alternative")) {
+          if (!save && part3.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
+            mailMsg.setTxtBody(part3.getContent().toString());
+          } else if (!save && part3.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
+            mailMsg.setHtmlBody(part3.getContent().toString());
+          } else if (!save && part3.isMimeType("multipart/alternative")) {
+            // generally if the content type multipart/alternative, it is email text.
             if (part3.getContent() instanceof Multipart) {
               Multipart multi3 = (Multipart) part3.getContent();
               for (int k = 0; k < multi3.getCount(); k++) {
@@ -377,16 +382,12 @@ public abstract class AbstractMailReceiver implements MailReceiver {
               }
             }
           } else if (part3.isMimeType("multipart/related")) {
-            if (!save && part3.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
-              mailMsg.setTxtBody(part3.getContent().toString());
-            } else if (!save && part3.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
-              mailMsg.setHtmlBody(part3.getContent().toString());
-            } else if (part3.getContent() instanceof Multipart) {
+            if (part3.getContent() instanceof Multipart) {
               Multipart multi3 = (Multipart) part3.getContent();
               for (int m = 0; m < multi3.getCount(); m++) {
                 Part part4 = multi3.getBodyPart(m);
-                if (!save && part4.isMimeType("multipart/alternative")) {
-                  if (part4.getContent() instanceof Multipart) {
+                if (part4.isMimeType("multipart/alternative")) {
+                  if (!save && part4.getContent() instanceof Multipart) {
                     Multipart multi4 = (Multipart) part4.getContent();
                     for (int p = 0; p < multi4.getCount(); p++) {
                       Part part5 = multi4.getBodyPart(p);
@@ -412,7 +413,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
             }
           }
         }
-      } else {
+      } else if (save) {
         // Process the attachment.(This is a certificate file.)
         String disposition = part2.getDisposition();
         if (disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
@@ -421,7 +422,11 @@ public abstract class AbstractMailReceiver implements MailReceiver {
         }
       }
     }
-    return mailMsg;
+    if (save) {
+      return attachList.toString();
+    } else {
+      return JSONArray.fromObject(mailMsg).toString();
+    }
   }
 
   /**
@@ -442,7 +447,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
     String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
     if (this.suffixList.contains(suffix.toLowerCase())) {
       String tempDir = System.getProperty("java.io.tmpdir");
-      fileName = tempDir + prefix + uuid + "." + suffix;
+      fileName = tempDir + "/temp/" + prefix + uuid + "." + suffix;
 
       int fileSize = part.getSize();
       Attachment attachment = new Attachment();
@@ -559,32 +564,16 @@ public abstract class AbstractMailReceiver implements MailReceiver {
     String xAutoRespondHeaderName = "X-Autorespond";
     String xAutoSubmittedHeaderName = "auto-submitted";
 
-    String xAutoResponseSuppressVal = this.headerToString(msg.getHeader(xAutoResponseSuppressHeaderName));
-    String xAutoReplyVal = this.headerToString(msg.getHeader(xAutoReplyHeaderName));
-    String xAutoRespondVal = this.headerToString(msg.getHeader(xAutoRespondHeaderName));
-    String xAutoSubmittedVal = this.headerToString(msg.getHeader(xAutoSubmittedHeaderName));
+    String xAutoResponseSuppressVal = Arrays.toString(msg.getHeader(xAutoResponseSuppressHeaderName));
+    String xAutoReplyVal = Arrays.toString(msg.getHeader(xAutoReplyHeaderName));
+    String xAutoRespondVal = Arrays.toString(msg.getHeader(xAutoRespondHeaderName));
+    String xAutoSubmittedVal = Arrays.toString(msg.getHeader(xAutoSubmittedHeaderName));
     String contentType = msg.getContentType();
 
     // If any of those are present in an email, then that email is an auto-reply.
     String[] autoReplyArray = { xAutoResponseSuppressVal, xAutoReplyVal, xAutoRespondVal, xAutoSubmittedVal };
     mailMsg.setAutoReply(autoReplyArray);
     mailMsg.setContentType(contentType);
-  }
-
-  /**
-   * Convert array to string.
-   * 
-   * @param headerArray
-   * @return
-   */
-  private String headerToString(String[] headerArray) {
-    String headerStr = "";
-    if (headerArray != null && headerArray.length > 0) {
-      for (String header : headerArray) {
-        headerStr = headerStr + header + ";";
-      }
-    }
-    return headerStr;
   }
 
   /**
