@@ -3,7 +3,6 @@
  */
 package com.java.mail.domain;
 
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -30,14 +29,11 @@ public class MailMessage {
   /* a email's subject. */
   private String subject;
 
-  /* a email's body, format is txt */
-  private String txtBody;
-
-  /* a email's body, format is html */
-  private String htmlBody;
+  /* a email's body */
+  private String body;
 
   /* the date of sending a email. */
-  private Date sendDate;
+  private String sendDate;
 
   private boolean hasAttachments;
 
@@ -114,27 +110,19 @@ public class MailMessage {
     this.subject = subject;
   }
 
-  public String getTxtBody() {
-    return this.txtBody;
+  public String getBody() {
+    return this.body;
   }
 
-  public void setTxtBody(String txtBody) {
-    this.txtBody = txtBody;
+  public void setBody(String body) {
+    this.body = body;
   }
 
-  public String getHtmlBody() {
-    return this.htmlBody;
-  }
-
-  public void setHtmlBody(String htmlBody) {
-    this.htmlBody = htmlBody;
-  }
-
-  public Date getSendDate() {
+  public String getSendDate() {
     return this.sendDate;
   }
 
-  public void setSendDate(Date sendDate) {
+  public void setSendDate(String sendDate) {
     this.sendDate = sendDate;
   }
 

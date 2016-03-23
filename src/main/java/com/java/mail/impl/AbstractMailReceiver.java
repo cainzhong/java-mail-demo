@@ -12,6 +12,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.security.Security;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -47,6 +48,8 @@ import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.mail.smime.SMIMESigned;
 import org.bouncycastle.operator.OperatorCreationException;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Whitelist;
 
 import com.hp.ov.sm.common.core.Init;
 import com.hp.ov.sm.common.core.JLog;
@@ -56,6 +59,7 @@ import com.java.mail.domain.MailAddress;
 import com.java.mail.domain.MailMessage;
 
 import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
 
 /**
  * @author zhontao
@@ -73,7 +77,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
 
   private static final int BUFFSIZE = 64 * 1024;
 
-  /* the default value of the maximum quantity for receiving mails during one time */
+  /* Only for EWS, the default value of the maximum quantity for receiving mails during one time */
   protected static final int DEFAULT_MAX_MAIL_QUANTITY = 1000;
 
   protected static final String DEFAULT_SOURCE_FOLDER_NAME = "INBOX";
@@ -88,6 +92,10 @@ public abstract class AbstractMailReceiver implements MailReceiver {
 
   protected static final String IMAPS = "IMAPS";
 
+  protected static final String DATE_FORMAT_MM_DD_YYYY = "MM/dd/yyyy";
+
+  protected static final String TIME_ZONE_UTC = "UTC";
+
   protected Session session;
 
   protected Store store;
@@ -95,8 +103,6 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   protected FetchProfile profile;
 
   protected Folder sourceFolder;
-
-  protected Folder toFolder;
 
   /* Incoming Mail" server, eg. webmail.hp.com */
   protected String host;
@@ -113,9 +119,9 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   protected String password;
 
   /* the file suffix which can be saved, others will be ignored */
-  protected List<String> suffixList;
-
-  protected List<String> authorisedUserList;
+  // protected List<String> suffixList;
+  //
+  // protected List<String> authorisedUserList;
 
   /* eg. true or false, whether Incoming Mail server needs authentication or not */
   protected boolean proxySet;
@@ -126,8 +132,6 @@ public abstract class AbstractMailReceiver implements MailReceiver {
 
   protected String sourceFolderName;
 
-  protected String toFolderName;
-
   protected static int attachmentsegmentsize;
 
   protected static int maxattachmentcount;
@@ -135,9 +139,14 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   /* the maximum quantity for receiving mails during one time */
   protected int maxMailQuantity;
 
+  /* the maximum size for one single mail */
+  protected int maxMailSize;
+
   protected String uri;
 
   static {
+    Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
+
     // read the attachment segment size from configuration file, if it is null, set as default value.
     String attachmentsegmentsizeStr = Init.getInstance().getProperty("attachmentsegmentsize");
     if (attachmentsegmentsizeStr == null || attachmentsegmentsizeStr.length() == 0) {
@@ -157,15 +166,14 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   public String readMessage(String filePath) throws Exception {
     MailMessage mailMsg = new MailMessage();
     MimeMessage mime = this.readEMLToMessage(filePath);
-    this.getHeader(mime, mailMsg);
-    return this.processMsg(mime, mailMsg, false);
+    this.processHeader(mime, mailMsg);
+    return this.processMessage(mime, mailMsg);
   }
 
   @Override
   public String readAttachments(String filePath) throws Exception {
-    MailMessage mailMsg = new MailMessage();
     MimeMessage mime = this.readEMLToMessage(filePath);
-    return this.processMsg(mime, mailMsg, true);
+    return this.processMessage(mime);
   }
 
   /**
@@ -183,11 +191,10 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   }
 
   /**
-   * Process message according to specified MIME type.
+   * Process message not including mail attachments according to specified MIME type.
    * 
    * @param mime
    * @param mailMsg
-   * @param save
    * @return
    * @throws MessagingException
    * @throws IOException
@@ -195,84 +202,332 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * @throws OperatorCreationException
    * @throws CertificateException
    */
-  protected String processMsg(MimeMessage mime, MailMessage mailMsg, boolean save) throws MessagingException, IOException, CMSException, OperatorCreationException, CertificateException {
-    System.out.println("Size" + mime.getSize());
+  protected String processMessage(MimeMessage mime, MailMessage mailMsg) throws MessagingException, IOException, CMSException, OperatorCreationException, CertificateException {
     String message = null;
-    if (!this.exceedMaxMsgSize(mime.getSize())) {
-      if (mime.isMimeType("text/html") || mime.isMimeType("text/plain") || mime.isMimeType("multipart/mixed")) {
-        // simple mail without/with attachment
-        message = this.processSimpleMail(mime, mailMsg, save);
-      } else if (mime.isMimeType("multipart/signed")) {
-        // signed mail with/without attachment
-        if (!save) {
-          this.validateSignedMail(mime, mailMsg);
-        }
-        message = this.processSignedMail(mime, mailMsg, save);
-      } else if (mime.isMimeType("application/pkcs7-mime") || mime.isMimeType("application/x-pkcs7-mime")) {
-        String e = "It's an encrypted mail. Can not handle the Message receiving from Mail Server.";
-        LOG.error(e);
-        throw new MessagingException(e);
-      } else {
-        String e = "Unknown MIME Type | Message Content Type: " + mime.getContentType() + "Message Subject: " + mime.getSubject() + "Message Send Date: " + mime.getSentDate() + "Message From: " + mime.getFrom().toString();
-        LOG.error(e);
-        throw new MessagingException(e);
-      }
+    if (mime.isMimeType("text/html") || mime.isMimeType("text/plain") || mime.isMimeType("multipart/mixed")) {
+      // simple mail with/without attachment
+      message = this.processSimpleMail(mime, mailMsg);
+    } else if (mime.isMimeType("multipart/signed")) {
+      // signed mail with/without attachment
+      this.validateSignedMail(mime, mailMsg);
+      message = this.processSignedMail(mime, mailMsg);
+    } else if (mime.isMimeType("application/pkcs7-mime") || mime.isMimeType("application/x-pkcs7-mime")) {
+      String e = "It's an encrypted mail. Can not handle the Message receiving from Mail Server.";
+      LOG.error(e);
+      throw new MessagingException(e);
+    } else {
+      String e = "Unknown MIME Type | Message Content Type: " + mime.getContentType() + "Message Subject: " + mime.getSubject() + "Message Send Date: " + mime.getSentDate() + "Message From: " + mime.getFrom().toString();
+      LOG.error(e);
+      throw new MessagingException(e);
     }
     return message;
   }
 
   /**
-   * Set MailMessage for simple mail with/without attachment.
+   * Process specified MIME type of MimeMessage to get attachments and save them to disk.
    * 
    * @param mime
-   * @param mailMsg
-   * @param save
    * @return
    * @throws MessagingException
    * @throws IOException
+   * @throws CMSException
+   * @throws OperatorCreationException
+   * @throws CertificateException
    */
-  private String processSimpleMail(MimeMessage mime, MailMessage mailMsg, boolean save) throws IOException, MessagingException {
-    List<Attachment> attachList = new ArrayList<Attachment>();
+  protected String processMessage(MimeMessage mime) throws MessagingException, IOException, CMSException, OperatorCreationException, CertificateException {
+    String attachList = null;
+    if (mime.isMimeType("text/html") || mime.isMimeType("text/plain") || mime.isMimeType("multipart/mixed")) {
+      // simple mail with attachment
+      attachList = this.processAttachmentsOfSimpleMail(mime);
+    } else if (mime.isMimeType("multipart/signed")) {
+      // signed mail with attachment
+      attachList = this.processAttachmentsOfSignedMail(mime);
+    } else if (mime.isMimeType("application/pkcs7-mime") || mime.isMimeType("application/x-pkcs7-mime")) {
+      String e = "It's an encrypted mail. Can not handle the Message receiving from Mail Server.";
+      LOG.error(e);
+      throw new MessagingException(e);
+    } else {
+      String e = "Unknown MIME Type | Message Content Type: " + mime.getContentType() + "Message Subject: " + mime.getSubject() + "Message Send Date: " + mime.getSentDate() + "Message From: " + mime.getFrom().toString();
+      LOG.error(e);
+      throw new MessagingException(e);
+    }
+    return attachList;
+  }
+
+  /**
+   * Process the MimeMessage for simple mail with/without attachment.
+   * 
+   * @param mime
+   * @param mailMsg
+   * @return
+   * @throws IOException
+   * @throws MessagingException
+   */
+  private String processSimpleMail(MimeMessage mime, MailMessage mailMsg) throws IOException, MessagingException {
     mailMsg.setHasSignature(false);
     mailMsg.setSignaturePassed(false);
-    this.setMailBasicInfoForMailMsg(mime, mailMsg, save);
+    this.setMailBasicInfoForMailMsg(mime, mailMsg);
 
-    if (!save && mime.isMimeType("text/plain")) {
-      mailMsg.setTxtBody(mime.getContent().toString());
-    } else if (!save && mime.isMimeType("text/html")) {
-      mailMsg.setHtmlBody(mime.getContent().toString());
+    String txtBody = null;
+    String htmlBody = null;
+    if (mime.isMimeType("text/plain")) {
+      txtBody = mime.getContent().toString();
+    } else if (mime.isMimeType("text/html")) {
+      htmlBody = mime.getContent().toString();
     } else if (mime.getContent() instanceof Multipart) {
-      // Get the content of the messsage, it's an Multipart object like a package including all the email text and attachment.
-      Multipart multi1 = (Multipart) mime.getContent();
+      // Get the content of the messsage, it's an Multipart object like a package including all the email text and attachments.
+      Multipart multi = (Multipart) mime.getContent();
       // First, verify the quantity and size of attachments.
-      boolean isValidMailMsg = this.isValidMailMsg(multi1, mailMsg);
+      boolean isValidMailMsg = this.isValidMailMsg(multi);
       if (isValidMailMsg) {
         // process each part in order.
-        for (int i = 0, n = multi1.getCount(); i < n; i++) {
+        for (int i = 0, n = multi.getCount(); i < n; i++) {
           // unpack, get each part of Multipart, part 0 may email text and part 1 may attachment. Or it is another embedded Multipart.
-          Part part = multi1.getBodyPart(i);
-          if (!save && part.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
-            mailMsg.setTxtBody(part.getContent().toString());
-          } else if (!save && part.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) {
-            mailMsg.setHtmlBody(part.getContent().toString());
+          Part part1 = multi.getBodyPart(i);
+          if (part1.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part1.getDisposition())) {
+            txtBody = part1.getContent().toString();
+          } else if (part1.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part1.getDisposition())) {
+            htmlBody = part1.getContent().toString();
+          } else if (part1.isMimeType("multipart/related")) {
+            if (part1.getContent() instanceof Multipart) {
+              Multipart multi1 = (Multipart) part1.getContent();
+              for (int m = 0; m < multi1.getCount(); m++) {
+                Part part2 = multi1.getBodyPart(m);
+                if (part2.isMimeType("multipart/alternative")) {
+                  if (part2.getContent() instanceof Multipart) {
+                    Multipart multi2 = (Multipart) part2.getContent();
+                    for (int p = 0; p < multi2.getCount(); p++) {
+                      Part part3 = multi2.getBodyPart(p);
+                      if (part3.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
+                        txtBody = part3.getContent().toString();
+                      } else if (part3.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
+                        htmlBody = part3.getContent().toString();
+                      }
+                    }
+                  }
+                } else if (part2.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part2.getDisposition())) {
+                  txtBody = part2.getContent().toString();
+                } else if (part2.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part2.getDisposition())) {
+                  htmlBody = part2.getContent().toString();
+                } else {
+                  // This is an embedded picture, set it as an attachment.
+                  mailMsg.setHasAttachments(true);
+                }
+              }
+            }
           } else {
-            String disposition = part.getDisposition();
+            String disposition = part1.getDisposition();
             if (disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
               mailMsg.setHasAttachments(true);
-              if (save) {
-                // Save the attachment if it is.
-                this.saveAttachment(part, attachList);
-              }
             }
           }
         }
       }
     }
-    if (save) {
-      return attachList.toString();
+    if (!isNull(txtBody)) {
+      mailMsg.setBody(txtBody);
     } else {
-      return JSONArray.fromObject(mailMsg).toString();
+      String jsoup = Jsoup.clean(htmlBody, Whitelist.relaxed());
+      mailMsg.setBody(jsoup);
     }
+    return JSONObject.fromObject(mailMsg).toString();
+  }
+
+  /**
+   * Process the MimeMessage from simple Mail to get attachments and save them to disk.
+   * 
+   * @param mime
+   * @return
+   * @throws IOException
+   * @throws MessagingException
+   */
+  private String processAttachmentsOfSimpleMail(MimeMessage mime) throws IOException, MessagingException {
+    List<Attachment> attachList = new ArrayList<Attachment>();
+
+    if (mime.getContent() instanceof Multipart) {
+      // Get the content of the messsage, it's an Multipart object like a package including all the email text and attachment.
+      Multipart multi = (Multipart) mime.getContent();
+      // First, verify the quantity and size of attachments.
+      boolean isValidMailMsg = this.isValidMailMsg(multi);
+      if (isValidMailMsg) {
+        // process each part in order.
+        for (int i = 0, n = multi.getCount(); i < n; i++) {
+          // unpack, get each part of Multipart, part 0 may email text and part 1 may attachment. Or it is another embedded Multipart.
+          Part part1 = multi.getBodyPart(i);
+          if (part1.isMimeType("multipart/related")) {
+            if (part1.getContent() instanceof Multipart) {
+              Multipart multi1 = (Multipart) part1.getContent();
+              for (int m = 0; m < multi1.getCount(); m++) {
+                Part part2 = multi1.getBodyPart(m);
+                if (!(part2.isMimeType("multipart/alternative") || part2.isMimeType("text/plain") || part2.isMimeType("text/html"))) {
+                  // This is an embedded picture, set it as an attachment.
+                  this.saveAttachment(part2, attachList);
+                }
+              }
+            }
+          } else {
+            String disposition = part1.getDisposition();
+            if (disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
+              // Save the attachment if it is.
+              this.saveAttachment(part1, attachList);
+            }
+          }
+        }
+      }
+    }
+    return JSONArray.fromObject(attachList).toString();
+  }
+
+  /**
+   * Process the MimeMessage for signed mail with/without attachment.
+   * 
+   * @param mime
+   * @param mailMsg
+   * @return
+   * @throws MessagingException
+   * @throws IOException
+   */
+  private String processSignedMail(MimeMessage mime, MailMessage mailMsg) throws IOException, MessagingException {
+    this.setMailBasicInfoForMailMsg(mime, mailMsg);
+
+    String txtBody = null;
+    String htmlBody = null;
+    // Get the content of the messsage, it's an Multipart object like a package including all the email text and attachment.
+    Multipart multi1 = (Multipart) mime.getContent();
+    // process each part in order.
+    for (int i = 0, n = multi1.getCount(); i < n; i++) {
+      // unpack, get each part of Multipart, part 0 may email text and part 1 may attachment. Or it is another embedded Multipart.
+      Part part2 = multi1.getBodyPart(i);
+      // determine Part is email text or Multipart.
+      if (part2.getContent() instanceof Multipart) {
+        Multipart multi2 = (Multipart) part2.getContent();
+        // First, verify the quantity and size of attachments.
+        boolean isValidMailMsg = this.isValidMailMsg(multi2);
+        if (isValidMailMsg) {
+          // process the content in multi2.
+          for (int j = 0; j < multi2.getCount(); j++) {
+            Part part3 = multi2.getBodyPart(j);
+            if (part3.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
+              txtBody = part3.getContent().toString();
+            } else if (part3.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
+              htmlBody = part3.getContent().toString();
+            } else if (part3.isMimeType("multipart/alternative")) {
+              // generally if the content type multipart/alternative, it is email text.
+              if (part3.getContent() instanceof Multipart) {
+                Multipart multi3 = (Multipart) part3.getContent();
+                for (int k = 0; k < multi3.getCount(); k++) {
+                  Part part4 = multi3.getBodyPart(k);
+                  if (part4.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
+                    txtBody = part4.getContent().toString();
+                  } else if (part4.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
+                    htmlBody = part4.getContent().toString();
+                  }
+                }
+              }
+            } else if (part3.isMimeType("multipart/related")) {
+              if (part3.getContent() instanceof Multipart) {
+                Multipart multi3 = (Multipart) part3.getContent();
+                for (int m = 0; m < multi3.getCount(); m++) {
+                  Part part4 = multi3.getBodyPart(m);
+                  if (part4.isMimeType("multipart/alternative")) {
+                    if (part4.getContent() instanceof Multipart) {
+                      Multipart multi4 = (Multipart) part4.getContent();
+                      for (int p = 0; p < multi4.getCount(); p++) {
+                        Part part5 = multi4.getBodyPart(p);
+                        if (part5.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part5.getDisposition())) {
+                          txtBody = part5.getContent().toString();
+                        } else if (part5.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part5.getDisposition())) {
+                          htmlBody = part5.getContent().toString();
+                        }
+                      }
+                    }
+                  } else {
+                    // This is an embedded picture, set it as an attachment.
+                    mailMsg.setHasAttachments(true);
+                  }
+                }
+              }
+            } else {
+              String disposition = part3.getDisposition();
+              if (disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
+                mailMsg.setHasAttachments(true);
+              }
+            }
+          }
+        }
+      } else {
+        // This is a certificate file, set it as an attachment
+        String disposition = part2.getDisposition();
+        if (disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
+          mailMsg.setHasAttachments(true);
+        }
+      }
+    }
+    if (!isNull(txtBody)) {
+      mailMsg.setBody(txtBody);
+    } else {
+      String jsoup = Jsoup.clean(htmlBody, Whitelist.relaxed());
+      mailMsg.setBody(jsoup);
+    }
+    return JSONObject.fromObject(mailMsg).toString();
+  }
+
+  /**
+   * Process the MimeMessage from signed Mail to get attachments and save them to disk.
+   * 
+   * @param mime
+   * @return
+   * @throws MessagingException
+   * @throws IOException
+   */
+  private String processAttachmentsOfSignedMail(MimeMessage mime) throws IOException, MessagingException {
+    List<Attachment> attachList = new ArrayList<Attachment>();
+
+    // Get the content of the messsage, it's an Multipart object like a package including all the email text and attachment.
+    Multipart multi1 = (Multipart) mime.getContent();
+
+    // process each part in order.
+    for (int i = 0, n = multi1.getCount(); i < n; i++) {
+      // unpack, get each part of Multipart, part 0 may email text and part 1 may attachment. Or it is another embedded Multipart.
+      Part part2 = multi1.getBodyPart(i);
+      // determine Part is email text or Multipart.
+      if (part2.getContent() instanceof Multipart) {
+        Multipart multi2 = (Multipart) part2.getContent();
+        // First, verify the quantity and size of attachments.
+        boolean isValidMailMsg = this.isValidMailMsg(multi2);
+        if (isValidMailMsg) {
+          // process the content in multi2.
+          for (int j = 0; j < multi2.getCount(); j++) {
+            Part part3 = multi2.getBodyPart(j);
+            if (part3.isMimeType("multipart/related")) {
+              if (part3.getContent() instanceof Multipart) {
+                Multipart multi3 = (Multipart) part3.getContent();
+                for (int m = 0; m < multi3.getCount(); m++) {
+                  Part part4 = multi3.getBodyPart(m);
+                  if (!part4.isMimeType("multipart/alternative")) {
+                    // This is an embedded picture, save it.
+                    this.saveAttachment(part4, attachList);
+                  }
+                }
+              }
+            } else {
+              // Save the attachment.
+              String disposition = part3.getDisposition();
+              if (disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
+                this.saveAttachment(part3, attachList);
+              }
+            }
+          }
+        }
+      } else {
+        // Process the attachment.(This is a certificate file.)
+        String disposition = part2.getDisposition();
+        if (disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
+          this.saveAttachment(part2, attachList);
+        }
+      }
+    }
+    return attachList.toString();
   }
 
   /**
@@ -336,100 +591,6 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   }
 
   /**
-   * Set MailMessage for signed mail with/without attachment.
-   * 
-   * @param mime
-   * @param mailMsg
-   * @param save
-   * @return
-   * @throws MessagingException
-   * @throws IOException
-   */
-  private String processSignedMail(MimeMessage mime, MailMessage mailMsg, boolean save) throws IOException, MessagingException {
-    List<Attachment> attachList = new ArrayList<Attachment>();
-
-    this.setMailBasicInfoForMailMsg(mime, mailMsg, save);
-    // Get the content of the messsage, it's an Multipart object like a package including all the email text and attachment.
-    Multipart multi1 = (Multipart) mime.getContent();
-
-    // process each part in order.
-    for (int i = 0, n = multi1.getCount(); i < n; i++) {
-      // unpack, get each part of Multipart, part 0 may email text and part 1 may attachment. Or it is another embedded Multipart.
-      Part part2 = multi1.getBodyPart(i);
-      // determine Part is email text or Multipart.
-      if (part2.getContent() instanceof Multipart) {
-        Multipart multi2 = (Multipart) part2.getContent();
-        // First, verify the quantity and size of attachments.
-        boolean isValidMailMsg = this.isValidMailMsg(multi2, mailMsg);
-        // process the content in multi2.
-        for (int j = 0; j < multi2.getCount(); j++) {
-          Part part3 = multi2.getBodyPart(j);
-          if (!save && part3.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
-            mailMsg.setTxtBody(part3.getContent().toString());
-          } else if (!save && part3.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part3.getDisposition())) {
-            mailMsg.setHtmlBody(part3.getContent().toString());
-          } else if (!save && part3.isMimeType("multipart/alternative")) {
-            // generally if the content type multipart/alternative, it is email text.
-            if (part3.getContent() instanceof Multipart) {
-              Multipart multi3 = (Multipart) part3.getContent();
-              for (int k = 0; k < multi3.getCount(); k++) {
-                Part part4 = multi3.getBodyPart(k);
-                if (part4.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
-                  mailMsg.setTxtBody(part4.getContent().toString());
-                } else if (part4.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part4.getDisposition())) {
-                  mailMsg.setHtmlBody(part4.getContent().toString());
-                }
-              }
-            }
-          } else if (part3.isMimeType("multipart/related")) {
-            if (part3.getContent() instanceof Multipart) {
-              Multipart multi3 = (Multipart) part3.getContent();
-              for (int m = 0; m < multi3.getCount(); m++) {
-                Part part4 = multi3.getBodyPart(m);
-                if (part4.isMimeType("multipart/alternative")) {
-                  if (!save && part4.getContent() instanceof Multipart) {
-                    Multipart multi4 = (Multipart) part4.getContent();
-                    for (int p = 0; p < multi4.getCount(); p++) {
-                      Part part5 = multi4.getBodyPart(p);
-                      if (part5.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part5.getDisposition())) {
-                        mailMsg.setTxtBody(part5.getContent().toString());
-                      } else if (part5.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part5.getDisposition())) {
-                        mailMsg.setHtmlBody(part5.getContent().toString());
-                      }
-                    }
-                  }
-                } else if (save && isValidMailMsg) {
-                  // This is an embedded picture, save it.
-                  this.saveAttachment(part4, attachList);
-                }
-              }
-            }
-          } else if (save && isValidMailMsg) {
-            // Save the attachment.
-            String disposition = part3.getDisposition();
-            if (disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
-              mailMsg.setHasAttachments(true);
-              this.saveAttachment(part3, attachList);
-            }
-          }
-        }
-      } else if (save) {
-        // Process the attachment.(This is a certificate file.)
-        String disposition = part2.getDisposition();
-        if (disposition != null && Part.ATTACHMENT.equalsIgnoreCase(disposition)) {
-          mailMsg.setHasAttachments(true);
-          this.saveAttachment(part2, attachList);
-        }
-      }
-    }
-    if (save) {
-      return attachList.toString();
-    } else {
-      return JSONArray.fromObject(mailMsg).toString();
-    }
-  }
-
-  /**
    * Save attachment.
    * 
    * @param part
@@ -441,24 +602,21 @@ public abstract class AbstractMailReceiver implements MailReceiver {
     // generate a new file name with unique UUID.
     String fileName = part.getFileName();
     fileName = MimeUtility.decodeText(fileName);
+    Attachment attachment = new Attachment();
+    attachment.setFileName(fileName);
 
     UUID uuid = UUID.randomUUID();
     String prefix = fileName.substring(0, fileName.lastIndexOf(".") + 1);
     String suffix = fileName.substring(fileName.lastIndexOf(".") + 1);
-    if (this.suffixList.contains(suffix.toLowerCase())) {
-      String tempDir = System.getProperty("java.io.tmpdir");
-      fileName = tempDir + "/temp/" + prefix + uuid + "." + suffix;
+    String tempDir = System.getProperty("java.io.tmpdir");
+    String filePath = tempDir + prefix + uuid + "." + suffix;
 
-      int fileSize = part.getSize();
-      Attachment attachment = new Attachment();
-      attachment.setFileName(fileName);
-      attachment.setFileType(suffix);
-      attachment.setFileSize(fileSize);
-      attachList.add(attachment);
-      this.saveFile(fileName, part.getInputStream());
-    } else {
-      LOG.info(fileName + " is not a supported file. Ignore this file.");
-    }
+    int fileSize = part.getSize();
+    attachment.setFilePath(filePath);
+    attachment.setFileType(suffix);
+    attachment.setFileSize(fileSize);
+    attachList.add(attachment);
+    this.saveFile(filePath, part.getInputStream());
   }
 
   /**
@@ -497,27 +655,24 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * 
    * @param mime
    * @param mailMsg
-   * @param save
    * @throws MessagingException
    */
-  private void setMailBasicInfoForMailMsg(MimeMessage mime, MailMessage mailMsg, boolean save) throws MessagingException {
-    if (!save) {
-      String msgId = mime.getMessageID();
-      Address[] from = mime.getFrom();
-      Address[] to = mime.getRecipients(RecipientType.TO);
-      Address[] cc = mime.getRecipients(RecipientType.CC);
-      Address[] bcc = mime.getRecipients(RecipientType.BCC);
-      String subject = mime.getSubject();
-      Date sendDate = mime.getSentDate();
+  private void setMailBasicInfoForMailMsg(MimeMessage mime, MailMessage mailMsg) throws MessagingException {
+    String msgId = mime.getMessageID();
+    Address[] from = mime.getFrom();
+    Address[] to = mime.getRecipients(RecipientType.TO);
+    Address[] cc = mime.getRecipients(RecipientType.CC);
+    Address[] bcc = mime.getRecipients(RecipientType.BCC);
+    String subject = mime.getSubject();
+    Date sendDate = mime.getSentDate();
 
-      mailMsg.setMsgId(msgId);
-      mailMsg.setFrom(this.convertToMailAddress(from));
-      mailMsg.setTo(this.convertToMailAddress(to));
-      mailMsg.setCc(this.convertToMailAddress(cc));
-      mailMsg.setBcc(this.convertToMailAddress(bcc));
-      mailMsg.setSubject(subject);
-      mailMsg.setSendDate(sendDate);
-    }
+    mailMsg.setMsgId(msgId);
+    mailMsg.setFrom(this.convertToMailAddress(from));
+    mailMsg.setTo(this.convertToMailAddress(to));
+    mailMsg.setCc(this.convertToMailAddress(cc));
+    mailMsg.setBcc(this.convertToMailAddress(bcc));
+    mailMsg.setSubject(subject);
+    mailMsg.setSendDate(sendDate.toString());
   }
 
   /**
@@ -527,7 +682,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    *          Address is a type of <code>javax.mail.Address<code>.
    * @return List&lt;MailAddress&gt;
    */
-  private List<MailAddress> convertToMailAddress(Address[] addresses) {
+  protected List<MailAddress> convertToMailAddress(Address[] addresses) {
     List<MailAddress> addressList = new ArrayList<MailAddress>();
     if ((addresses != null && addresses.length != 0)) {
       if (addresses instanceof InternetAddress[]) {
@@ -558,7 +713,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * @param mailMsg
    * @throws MessagingException
    */
-  protected void getHeader(Message msg, MailMessage mailMsg) throws MessagingException {
+  protected void processHeader(Message msg, MailMessage mailMsg) throws MessagingException {
     String xAutoResponseSuppressHeaderName = "X-Auto-Response-Suppress";
     String xAutoReplyHeaderName = "X-Autoreply";
     String xAutoRespondHeaderName = "X-Autorespond";
@@ -577,50 +732,14 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   }
 
   /**
-   * Check whether the given parameter is null or not.
-   * 
-   * @param s
-   *          String
-   * @return true means 's' is null
-   */
-  protected static boolean isNull(String s) {
-    if (s == null || s == "") {
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  /**
-   * Check whether the user name is belong to authorised user domain or not.
-   * 
-   * @param authorisedUserList
-   * @param username
-   * @return
-   */
-  protected static boolean isAuthorisedUsername(List<String> authorisedUserList, String username) {
-    if (authorisedUserList == null || authorisedUserList.isEmpty()) {
-      String msg = "The authorised user domain list is empty!";
-      LOG.info(msg);
-    }
-    for (String regex : authorisedUserList) {
-      if (username.matches(".*" + regex)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
    * Verify the mail's size and the attachments exceeding the maximum quantity.
    * 
    * @param multi
-   * @param mailMsg
    * @return
    * @throws MessagingException
    * @throws IOException
    */
-  private boolean isValidMailMsg(Multipart multi, MailMessage mailMsg) throws MessagingException, IOException {
+  private boolean isValidMailMsg(Multipart multi) throws MessagingException, IOException {
     boolean isValid = false;
     boolean exceedMaxMailSize = false;
     boolean exceedMaxAttachmentCount = false;
@@ -630,8 +749,8 @@ public abstract class AbstractMailReceiver implements MailReceiver {
       LOG.info("The attachments' quantity exceed the maximum value!");
     }
 
-    int mailSize = this.countMailSize(multi, 0);
-    if (mailSize > attachmentsegmentsize * maxattachmentcount) {
+    int mailAttachmentsSize = this.countMailAttachmentsSize(multi, 0);
+    if (mailAttachmentsSize > attachmentsegmentsize * maxattachmentcount) {
       exceedMaxMailSize = true;
       LOG.info("The size of all the attachments exceed the maximum value!");
     }
@@ -659,41 +778,89 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   }
 
   /**
-   * Count the mail size, it is a total mail size, including email body and all attachments.
+   * Count the mail attachments' size, it is a total mail attachments' size.
    * 
    * @param multi
-   * @param mailSize
+   * @param mailAttachmentsSize
    * @return
    * @throws MessagingException
    * @throws IOException
    */
-  protected int countMailSize(Multipart multi, int mailSize) throws MessagingException, IOException {
+  protected int countMailAttachmentsSize(Multipart multi, int mailAttachmentsSize) throws MessagingException, IOException {
     for (int i = 0, n = multi.getCount(); i < n; i++) {
       Part part = multi.getBodyPart(i);
 
       if (part.getContent() instanceof Multipart) {
-        mailSize = this.countMailSize((Multipart) part.getContent(), mailSize);
+        mailAttachmentsSize = this.countMailAttachmentsSize((Multipart) part.getContent(), mailAttachmentsSize);
       }
       int partSize = part.getSize();
       if (partSize != -1) {
-        mailSize = mailSize + partSize;
+        mailAttachmentsSize = mailAttachmentsSize + partSize;
       }
     }
-    return mailSize;
+    return mailAttachmentsSize;
   }
 
   /**
-   * Determine whether the mail's size exceeds the max mail's size or not.
+   * Check whether the given parameter is null or not.
    * 
-   * @param msgSize
+   * @param s
+   *          String
+   * @return true means 's' is null or empty
+   */
+  protected static boolean isNull(String s) {
+    if (s == null || "".equals(s)) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  /**
+   * Check whether the user name is belong to authorised user domain or not.
+   * 
+   * @param authorisedUserList
+   * @param username
    * @return
    */
-  protected boolean exceedMaxMsgSize(int msgSize) {
-    boolean exceedMaxMsgSize = false;
-    if (msgSize > attachmentsegmentsize * maxattachmentcount) {
-      exceedMaxMsgSize = true;
-      LOG.error("The size of all the attachments exceed the maximum value!");
+  protected static boolean isAuthorisedUsername(List<String> authorisedUserList, String username) {
+    if (authorisedUserList == null || authorisedUserList.isEmpty()) {
+      String msg = "The authorised user domain list is empty!";
+      LOG.info(msg);
     }
-    return exceedMaxMsgSize;
+    for (String regex : authorisedUserList) {
+      if (username.matches(".*" + regex)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check the given protocol is IMAP or IMAP. If it is, return true.
+   * 
+   * @param protocol
+   * @return
+   */
+  protected static boolean isIMAPorIMAPS(String protocol) {
+    if (IMAP.equalsIgnoreCase(protocol) || IMAPS.equalsIgnoreCase(protocol)) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  /**
+   * Check the given protocol is POP3 or POP3S. If it is, return true.
+   * 
+   * @param protocol
+   * @return
+   */
+  protected static boolean isPOP3orPOP3S(String protocol) {
+    if (POP3.equalsIgnoreCase(protocol) || POP3S.equalsIgnoreCase(protocol)) {
+      return true;
+    } else {
+      return false;
+    }
   }
 }

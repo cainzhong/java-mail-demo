@@ -66,10 +66,19 @@ public interface MailReceiver {
   /**
    * Move a message to a specific folder. POP3 and POP3S do not support to move a message from a folder to another.
    * 
+   * @param jsonParam
+   *          { "msgId": "msgId", "folder": "folder name" }
+   * @throws Exception
+   */
+  public void moveMessage(String jsonParam) throws Exception;
+
+  /**
+   * Delete a message. POP3 and POP3S do not support to delete a message.
+   * 
    * @param messageId
    * @throws Exception
    */
-  public void moveMessage(String messageId) throws Exception;
+  public void deleteMessage(String messageId) throws Exception;
 
   /**
    * Close the connection to the mail server.

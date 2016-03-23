@@ -12,10 +12,10 @@ public class MailConnectionTest {
     // System.setProperty("javax.net.ssl.trustStore", "C:\\Program Files\\Java\\jdk1.7.0_79\\jre\\lib\\security\\cacerts");
     Properties props = System.getProperties();
     Session session = Session.getDefaultInstance(props, null);
-    String protocol = "imaps";
+    String protocol = "imap";
     String host = "16.187.191.13";
-    String username = "cainzhong@bing.com";
-    String password = "Cisco01!";
+    String username = "pop3@bing.com";
+    String password = "1Qaz2wsx3edc";
     // Wu, Fei's PC
     // String host = "15.107.4.68";
     // String username = "cainzhong";

@@ -28,9 +28,13 @@ public class JSONUtil {
       while (it.hasNext()) {
         String key = String.valueOf(it.next());
         Object value = jsonObject.get(key);
+        if ("null".equalsIgnoreCase(String.valueOf(value)) || String.valueOf(value) == null) {
+          value = "";
+        }
         map.put(key, value);
       }
     }
     return map;
   }
+
 }

@@ -8,7 +8,7 @@ import java.io.FileOutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +35,9 @@ import org.apache.commons.logging.LogFactory;
 
 import com.hp.ov.sm.common.core.JLog;
 import com.java.mail.JSONUtil;
+import com.java.mail.domain.MailHeader;
 
+import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
 /**
@@ -59,103 +61,172 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
 
     // Check the folder existing or not. If not, create a new folder.
     Folder defaultFolder = this.store.getDefaultFolder();
-    if (!this.checkOrCreateExchangeServerFolder(defaultFolder, this.sourceFolderName) && !this.checkOrCreateExchangeServerFolder(defaultFolder, this.toFolderName)) {
-      String e = "Fail to create the folder.";
-      LOG.error(e);
-      throw new Exception(e);
-    }
-
-    // open mail folder
-    /* POP3Folder can only receive the mails in 'INBOX', IMAPFolder can receive the mails in all folders including created by user. */
-    this.sourceFolder = this.openFolder(this.sourceFolderName, Folder.READ_WRITE);
-    if (IMAP.equalsIgnoreCase(this.protocol) || IMAPS.equalsIgnoreCase(this.protocol)) {
-      this.toFolder = this.openFolder(this.toFolderName, Folder.READ_ONLY);
+    if (isIMAPorIMAPS(this.protocol)) {
+      if (this.checkOrCreateExchangeServerFolder(defaultFolder, this.sourceFolderName)) {
+        // open mail folder
+        /* POP3Folder can only receive the mails in 'INBOX', IMAPFolder can receive the mails in all folders including created by user. */
+        this.sourceFolder = this.openFolder(this.sourceFolderName, Folder.READ_WRITE);
+      } else {
+        String e = "Fail to create the folder.";
+        LOG.error(e);
+        throw new Exception(e);
+      }
+    } else {
+      // POP3 or POP3S can only open the "INBOX".
+      this.sourceFolder = this.openFolder(this.sourceFolderName, Folder.READ_WRITE);
     }
   }
 
   @Override
   public String getMsgIdList(String date) throws MessagingException, ParseException {
-    List<String> msgIdList = new ArrayList<String>();
-    SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
+    List<MailHeader> msgIdList = new ArrayList<MailHeader>();
+    SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT_MM_DD_YYYY);
     Date receivedDate = sdf.parse(date);
 
-    sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+    sdf.setTimeZone(TimeZone.getTimeZone(TIME_ZONE_UTC));
     String currentDateStr = sdf.format(new Date());
     Date currentDate = sdf.parse(currentDateStr);
 
     Message[] msgs = new Message[] {};
-    if (IMAP.equalsIgnoreCase(this.protocol) || IMAPS.equalsIgnoreCase(this.protocol)) {
-      ReceivedDateTerm receivedDateTerm = new ReceivedDateTerm(ComparisonTerm.GE, receivedDate);
+    if (isIMAPorIMAPS(this.protocol)) {
+      DateTerm receivedDateTerm = new ReceivedDateTerm(ComparisonTerm.GE, receivedDate);
       DateTerm currentDateTerm = new ReceivedDateTerm(ComparisonTerm.LE, currentDate);
       AndTerm andTerm = new AndTerm(receivedDateTerm, currentDateTerm);
       msgs = this.sourceFolder.search(andTerm);
-    } else if (POP3.equalsIgnoreCase(this.protocol) || POP3S.equalsIgnoreCase(this.protocol)) {
+      for (Message msg : msgs) {
+        MimeMessage mmsg = (MimeMessage) msg;
+        String receivedUTCDate = sdf.format(mmsg.getReceivedDate());
+        MailHeader mailHeader = new MailHeader();
+        mailHeader.setMsgId(mmsg.getMessageID());
+        mailHeader.setFrom(this.convertToMailAddress(mmsg.getFrom()));
+        mailHeader.setReceivedUTCDate(receivedUTCDate);
+        msgIdList.add(mailHeader);
+      }
+    } else if (isPOP3orPOP3S(this.protocol)) {
       msgs = this.sourceFolder.getMessages();
       // Get mails and UID
       this.sourceFolder.fetch(msgs, this.profile);
+      for (Message msg : msgs) {
+        MimeMessage mmsg = (MimeMessage) msg;
+        MailHeader mailHeader = new MailHeader();
+        mailHeader.setMsgId(mmsg.getMessageID());
+        msgIdList.add(mailHeader);
+      }
     }
-
-    for (Message msg : msgs) {
-      MimeMessage mmsg = (MimeMessage) msg;
-      String receivedUTCDate = sdf.format(mmsg.getReceivedDate());
-      String[] header = { mmsg.getMessageID(), receivedUTCDate };
-      msgIdList.add(Arrays.toString(header));
-    }
-    return msgIdList.toString();
-
+    Collections.sort(msgIdList, MailHeader.MailHeaderComparator);
+    return JSONArray.fromObject(msgIdList).toString();
   }
 
   @Override
   public String receive(String messageId) throws Exception {
     SearchTerm st = new MessageIDTerm(messageId);
     Message[] messages = this.sourceFolder.search(st);
-    Message msg = messages[0];
-
-    UUID uuid = UUID.randomUUID();
-    String tempDir = System.getProperty("java.io.tmpdir");
-    String fileName = tempDir + "/temp/" + uuid + ".eml";
-    File saveFile = new File(fileName);
-    FileOutputStream fs = new FileOutputStream(saveFile);
-    msg.writeTo(fs);
-    fs.close();
-
-    return fileName;
-  }
-
-  @Override
-  public void moveMessage(String messageId) throws Exception {
-    if ((this.sourceFolder != null && this.sourceFolder.isOpen()) && this.toFolder != null) {
-      // receive mails according to the message id.
-      SearchTerm st = new MessageIDTerm(messageId);
-      Message[] messages = this.sourceFolder.search(st);
-      Message msg = messages[0];
-      if (null != msg) {
-        Message[] needCopyMsgs = new Message[1];
-        needCopyMsgs[0] = msg;
-        // Copy the msg to the specific folder
-        this.sourceFolder.copyMessages(needCopyMsgs, this.toFolder);
-        // delete the original msg
-        // only add a delete flag on the message, it will not
-        // indeed to execute the delete operation.
-        msg.setFlag(Flags.Flag.DELETED, true);
+    String fileName = null;
+    if (messages.length > 0) {
+      MimeMessage msg = (MimeMessage) messages[0];
+      if (msg.getSize() <= this.maxMailSize) {
+        UUID uuid = UUID.randomUUID();
+        String tempDir = System.getProperty("java.io.tmpdir");
+        fileName = tempDir + uuid + ".eml";
+        File saveFile = new File(fileName);
+        FileOutputStream fs = new FileOutputStream(saveFile);
+        msg.writeTo(fs);
+        fs.close();
       } else {
-        String e = "No message find.";
+        String e = "The current mail size is great than the accepted max mail size. Subject: " + msg.getSubject() + ", From: " + msg.getFrom();
         LOG.error(e);
         throw new Exception(e);
       }
     } else {
-      String e = "The folder is null or closed.";
+      String e = "The email with message id: " + messageId + " can not be found.";
+      LOG.error(e);
+      throw new Exception(e);
+    }
+    return fileName.replace("\\", "\\\\");
+  }
+
+  @Override
+  public void moveMessage(String jsonParam) throws Exception {
+    JSONObject jsonObject = JSONObject.fromObject(jsonParam);
+    Map<String, Object> map = JSONUtil.convertJsonToMap(jsonObject);
+    if (map != null && !map.isEmpty()) {
+      String msgId = (String) map.get("msgId");
+      String moveToFolderName = (String) map.get("folder");
+      if (isIMAPorIMAPS(this.protocol)) {
+        if (this.checkOrCreateExchangeServerFolder(this.store.getDefaultFolder(), moveToFolderName)) {
+          Folder moveToFolder = this.openFolder(moveToFolderName, Folder.READ_ONLY);
+          if ((this.sourceFolder != null && this.sourceFolder.isOpen()) && moveToFolder != null) {
+            // receive mails according to the message id.
+            SearchTerm st = new MessageIDTerm(msgId);
+            Message[] messages = this.sourceFolder.search(st);
+            Message msg = messages[0];
+            if (null != msg) {
+              Message[] needCopyMsgs = new Message[1];
+              needCopyMsgs[0] = msg;
+              // Copy the msg to the specific folder
+              this.sourceFolder.copyMessages(needCopyMsgs, moveToFolder);
+              // delete the original msg only add a delete flag on the message, it will not indeed to execute the delete operation until close the folder.
+              msg.setFlag(Flags.Flag.DELETED, true);
+              moveToFolder.close(true);
+            } else {
+              String e = "No message find.";
+              LOG.error(e);
+              throw new MessagingException(e);
+            }
+          } else {
+            String e = "The folder is null or closed.";
+            LOG.error(e);
+            throw new MessagingException(e);
+          }
+        } else {
+          String e = "Fail to create the folder.";
+          LOG.error(e);
+          throw new MessagingException(e);
+        }
+      } else if (isPOP3orPOP3S(this.protocol)) {
+        String e = "POP3 and POP3S do not support to move a message from a folder to another.";
+        LOG.error(e);
+        throw new MessagingException(e);
+      }
+    } else {
+      String e = "May be the JSON Arguments is null.";
       LOG.error(e);
       throw new Exception(e);
     }
   }
 
   @Override
+  public void deleteMessage(String messageId) throws MessagingException {
+    if (isIMAPorIMAPS(this.protocol)) {
+      if ((this.sourceFolder != null && this.sourceFolder.isOpen())) {
+        // receive mails according to the message id.
+        SearchTerm st = new MessageIDTerm(messageId);
+        Message[] messages = this.sourceFolder.search(st);
+        Message msg = messages[0];
+        if (null != msg) {
+          // delete the original msg only add a delete flag on the message, it will not indeed to execute the delete operation until close the folder.
+          msg.setFlag(Flags.Flag.DELETED, true);
+        } else {
+          String e = "No message find.";
+          LOG.error(e);
+          throw new MessagingException(e);
+        }
+      } else {
+        String e = "The folder is null or closed.";
+        LOG.error(e);
+        throw new MessagingException(e);
+      }
+    } else if (isPOP3orPOP3S(this.protocol)) {
+      String e = "POP3 and POP3S do not support to delete a message.";
+      LOG.error(e);
+      throw new MessagingException(e);
+    }
+  }
+
+  @Override
   public void close() throws MessagingException {
-    // close the folder, true means that will indeed to delete the message,
-    // false means that will not delete the message.
+    // close the folder, true means that will indeed to delete the message, false means that will not delete the message.
     this.closeFolder(this.sourceFolderName, true);
-    this.closeFolder(this.toFolderName, true);
     this.store.close();
   }
 
@@ -165,8 +236,8 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
    * @param jsonParam
    * @throws Exception
    */
-  @SuppressWarnings("unchecked")
   private void initialize(String jsonParam) throws Exception {
+    LOG.debug(jsonParam);
     JSONObject jsonObject = JSONObject.fromObject(jsonParam);
     Map<String, Object> map = JSONUtil.convertJsonToMap(jsonObject);
     if (map != null && !map.isEmpty()) {
@@ -175,30 +246,31 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       this.protocol = (String) map.get("protocol");
       this.username = (String) map.get("username");
       this.password = (String) map.get("password");
-      this.suffixList = (List<String>) map.get("suffixList");
-      this.authorisedUserList = (List<String>) map.get("authorisedUserList");
-      this.proxySet = (Boolean) map.get("proxySet");
       this.proxyHost = (String) map.get("proxyHost");
       this.proxyPort = (String) map.get("proxyPort");
       this.sourceFolderName = (String) map.get("sourceFolderName");
-      this.toFolderName = (String) map.get("toFolderName");
-      this.uri = (String) map.get("uri");
-      this.maxMailQuantity = (Integer) map.get("maxMailQuantity");
+      try {
+        this.maxMailSize = (Integer) map.get("maxMailSize");
+      } catch (Exception e) {
+        this.maxMailSize = 0;
+      }
+      if (map.get("maxMailQuantity") == null) {
+        this.maxMailQuantity = DEFAULT_MAX_MAIL_QUANTITY;
+      } else {
+        this.maxMailQuantity = (Integer) map.get("maxMailQuantity");
+      }
 
       if (isNull(this.protocol) || isNull(this.host) || isNull(this.username) || isNull(this.password)) {
         String e = "Missing mandatory values, please check that you have entered the protocol, host, username or password.";
         LOG.error(e);
         throw new Exception(e);
-      } else if (!isAuthorisedUsername(this.authorisedUserList, this.username)) {
-        String e = "The user name is not belong to authorised user domain.";
+      } else if (this.maxMailSize <= 0) {
+        String e = "Please check the value of max mail size is great than zero.";
         LOG.error(e);
         throw new Exception(e);
       } else {
-        if (isNull(this.sourceFolderName)) {
+        if (isNull(this.sourceFolderName) || isPOP3orPOP3S(this.protocol)) {
           this.sourceFolderName = DEFAULT_SOURCE_FOLDER_NAME;
-        }
-        if (isNull(this.toFolderName)) {
-          this.toFolderName = DEFAULT_TO_FOLDER_NAME;
         }
         if (this.maxMailQuantity <= 0) {
           this.maxMailQuantity = DEFAULT_MAX_MAIL_QUANTITY;
@@ -224,19 +296,22 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     props.put("mail.smtp.auth", "true");
     props.put("mail.store.protocol", this.protocol);
 
+    props.put("mail.pop3.rsetbeforequit", "true");
+    props.put("mail.pop3s.rsetbeforequit", "true");
+
     props.put("mail.imap.partialfetch", "false");
     props.put("mail.imaps.partialfetch", "false");
 
     props.put("mail.imap.fetchsize", "1048576");
     props.put("mail.imaps.fetchsize", "1048576");
 
-    props.put("mail.imap.starttls.enable", "true");
-    props.put("mail.imaps.starttls.enable", "true");
+    // props.put("mail.imap.starttls.enable", "true");
+    // props.put("mail.imaps.starttls.enable", "true");
 
     props.put("mail.imap.compress.enable", "true");
     props.put("mail.imaps.compress.enable", "true");
     // Proxy
-    if (this.proxySet) {
+    if (!isNull(this.proxyHost) && !isNull(this.proxyPort)) {
       props.put("proxySet", "true");
       props.put("http.proxyHost", this.proxyHost);
       props.put("http.proxyPort", this.proxyPort);
@@ -252,7 +327,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
   }
 
   /**
-   * Check the folder is existing or not. If not, create a new folder.
+   * Check the folder is existing or not. If not, create a new folder. Only supports IMAP & IMAPS.
    * 
    * @param parent
    * @param folderName
@@ -264,17 +339,11 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     boolean folderExists = false;
     folderExists = this.store.getFolder(folderName).exists();
     if (!folderExists) {
-      if ((IMAP.equalsIgnoreCase(this.protocol) || IMAPS.equalsIgnoreCase(this.protocol))) {
-        // If parent is not the root directory, the folder should be opened.
-        // parent.open(Folder.READ_WRITE);
-        Folder newFolder = parent.getFolder(folderName);
-        isCreated = newFolder.create(Folder.HOLDS_MESSAGES);
-        // parent.close(true);
-      } else {
-        String e = "If you want to assign a specific folder, the protocol should be IMAP or IMAPS.";
-        LOG.error(e);
-        throw new Exception(e);
-      }
+      // If parent is not the root directory, the folder should be opened.
+      // parent.open(Folder.READ_WRITE);
+      Folder newFolder = parent.getFolder(folderName);
+      isCreated = newFolder.create(Folder.HOLDS_MESSAGES);
+      // parent.close(true);
     }
     return isCreated || folderExists;
   }

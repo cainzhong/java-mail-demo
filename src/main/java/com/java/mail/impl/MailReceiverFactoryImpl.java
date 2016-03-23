@@ -6,6 +6,8 @@ package com.java.mail.impl;
 import org.apache.commons.logging.LogFactory;
 
 import com.hp.ov.sm.common.core.JLog;
+import com.java.mail.MailReceiver;
+import com.java.mail.MailReceiverFactory;
 
 /**
  * @author zhontao
@@ -25,7 +27,7 @@ public class MailReceiverFactoryImpl implements MailReceiverFactory {
   }
 
   @Override
-  public AbstractMailReceiver create(String serverType) throws Exception {
+  public MailReceiver create(String serverType) throws Exception {
     if (EXCHANGER_SERVER.equalsIgnoreCase(serverType)) {
       return new ExchangeServerMailReceiverImpl();
     } else if (EXCHANGE_WEB_SERVICES.equalsIgnoreCase(serverType)) {

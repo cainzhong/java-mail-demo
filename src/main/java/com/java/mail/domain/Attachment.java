@@ -11,6 +11,9 @@ public class Attachment {
   /* an attachment's file name for a email. */
   private String fileName;
 
+  /* an attachment's file path for a email. */
+  private String filePath;
+
   /* an attachment's file type for a email. */
   private String fileType;
 
@@ -23,6 +26,14 @@ public class Attachment {
 
   public void setFileName(String fileName) {
     this.fileName = fileName;
+  }
+
+  public String getFilePath() {
+    return this.filePath;
+  }
+
+  public void setFilePath(String filePath) {
+    this.filePath = filePath;
   }
 
   public String getFileType() {
@@ -40,10 +51,4 @@ public class Attachment {
   public void setFileSize(int fileSize) {
     this.fileSize = fileSize;
   }
-
-  @Override
-  public String toString() {
-    return "Attachment [fileName=" + this.fileName + ", fileType=" + this.fileType + ", fileSize=" + this.fileSize + "]";
-  }
-
 }
