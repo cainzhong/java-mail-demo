@@ -25,7 +25,7 @@ public interface MailReceiver {
    * Get all message IDs great than or equal to the given date. But it is only support IMAP, IMAPS. For POP3 and POP3S, it will get all the messages in INBOX.
    * 
    * @param date
-   *          the given date. format: MM/dd/yyyy
+   *          the given date. format: MM/dd/yyyy HH:mm:ss eg. 03/23/2016 09:00:00
    * @return
    * @throws MessagingException
    * @throws ParseException
@@ -40,6 +40,7 @@ public interface MailReceiver {
    *          message id
    * @return
    * @throws Exception
+   *           When the current mail size is great than the accepted max mail size
    */
   public String receive(String messageId) throws Exception;
 

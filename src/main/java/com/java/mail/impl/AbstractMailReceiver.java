@@ -15,13 +15,18 @@ import java.io.OutputStream;
 import java.security.Security;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.mail.Address;
 import javax.mail.FetchProfile;
@@ -48,8 +53,6 @@ import org.bouncycastle.cms.SignerInformationStore;
 import org.bouncycastle.cms.jcajce.JcaSimpleSignerInfoVerifierBuilder;
 import org.bouncycastle.mail.smime.SMIMESigned;
 import org.bouncycastle.operator.OperatorCreationException;
-import org.jsoup.Jsoup;
-import org.jsoup.safety.Whitelist;
 
 import com.hp.ov.sm.common.core.Init;
 import com.hp.ov.sm.common.core.JLog;
@@ -58,6 +61,7 @@ import com.java.mail.domain.Attachment;
 import com.java.mail.domain.MailAddress;
 import com.java.mail.domain.MailMessage;
 
+import microsoft.exchange.webservices.data.property.complex.EmailAddress;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONObject;
 
@@ -92,7 +96,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
 
   protected static final String IMAPS = "IMAPS";
 
-  protected static final String DATE_FORMAT_MM_DD_YYYY = "MM/dd/yyyy";
+  protected static final String DATE_FORMAT_MM_DD_YYYY_HH_MM_SS = "MM/dd/yyyy HH:mm:ss";
 
   protected static final String TIME_ZONE_UTC = "UTC";
 
@@ -130,6 +134,10 @@ public abstract class AbstractMailReceiver implements MailReceiver {
 
   protected String proxyPort;
 
+  protected String proxyUser;
+
+  protected String proxyPassword;
+
   protected String sourceFolderName;
 
   protected static int attachmentsegmentsize;
@@ -138,6 +146,8 @@ public abstract class AbstractMailReceiver implements MailReceiver {
 
   /* the maximum quantity for receiving mails during one time */
   protected int maxMailQuantity;
+
+  protected boolean mailSizeCheck = true;
 
   /* the maximum size for one single mail */
   protected int maxMailSize;
@@ -183,10 +193,14 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * @return
    * @throws FileNotFoundException
    * @throws MessagingException
+   * @throws IOException
    */
-  private MimeMessage readEMLToMessage(String filePath) throws FileNotFoundException, MessagingException {
+  private MimeMessage readEMLToMessage(String filePath) throws MessagingException, IOException {
     InputStream is = new FileInputStream(filePath);
     MimeMessage mime = new MimeMessage(null, is);
+    if (is != null) {
+      is.close();
+    }
     return mime;
   }
 
@@ -201,10 +215,11 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * @throws CMSException
    * @throws OperatorCreationException
    * @throws CertificateException
+   * @throws ParseException
    */
-  protected String processMessage(MimeMessage mime, MailMessage mailMsg) throws MessagingException, IOException, CMSException, OperatorCreationException, CertificateException {
+  protected String processMessage(MimeMessage mime, MailMessage mailMsg) throws MessagingException, IOException, CMSException, OperatorCreationException, CertificateException, ParseException {
     String message = null;
-    if (mime.isMimeType("text/html") || mime.isMimeType("text/plain") || mime.isMimeType("multipart/mixed")) {
+    if (mime.isMimeType("text/html") || mime.isMimeType("text/plain") || mime.isMimeType("multipart/alternative") || mime.isMimeType("multipart/mixed")) {
       // simple mail with/without attachment
       message = this.processSimpleMail(mime, mailMsg);
     } else if (mime.isMimeType("multipart/signed")) {
@@ -216,7 +231,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
       LOG.error(e);
       throw new MessagingException(e);
     } else {
-      String e = "Unknown MIME Type | Message Content Type: " + mime.getContentType() + "Message Subject: " + mime.getSubject() + "Message Send Date: " + mime.getSentDate() + "Message From: " + mime.getFrom().toString();
+      String e = "Unknown MIME Type | Message Content Type: " + mime.getContentType() + ", Message Subject: " + mime.getSubject() + ", Message Send Date: " + mime.getSentDate() + ", Message From: " + mime.getFrom().toString();
       LOG.error(e);
       throw new MessagingException(e);
     }
@@ -247,7 +262,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
       LOG.error(e);
       throw new MessagingException(e);
     } else {
-      String e = "Unknown MIME Type | Message Content Type: " + mime.getContentType() + "Message Subject: " + mime.getSubject() + "Message Send Date: " + mime.getSentDate() + "Message From: " + mime.getFrom().toString();
+      String e = "Unknown MIME Type | Message Content Type: " + mime.getContentType() + ", Message Subject: " + mime.getSubject() + ", Message Send Date: " + mime.getSentDate() + ", Message From: " + mime.getFrom().toString();
       LOG.error(e);
       throw new MessagingException(e);
     }
@@ -262,8 +277,9 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * @return
    * @throws IOException
    * @throws MessagingException
+   * @throws ParseException
    */
-  private String processSimpleMail(MimeMessage mime, MailMessage mailMsg) throws IOException, MessagingException {
+  private String processSimpleMail(MimeMessage mime, MailMessage mailMsg) throws IOException, MessagingException, ParseException {
     mailMsg.setHasSignature(false);
     mailMsg.setSignaturePassed(false);
     this.setMailBasicInfoForMailMsg(mime, mailMsg);
@@ -288,6 +304,19 @@ public abstract class AbstractMailReceiver implements MailReceiver {
             txtBody = part1.getContent().toString();
           } else if (part1.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part1.getDisposition())) {
             htmlBody = part1.getContent().toString();
+          } else if (part1.isMimeType("multipart/alternative")) {
+            // generally if the content type multipart/alternative, it is email text.
+            if (part1.getContent() instanceof Multipart) {
+              Multipart multi1 = (Multipart) part1.getContent();
+              for (int k = 0; k < multi1.getCount(); k++) {
+                Part part2 = multi1.getBodyPart(k);
+                if (part2.isMimeType("text/plain") && !Part.ATTACHMENT.equalsIgnoreCase(part2.getDisposition())) {
+                  txtBody = part2.getContent().toString();
+                } else if (part2.isMimeType("text/html") && !Part.ATTACHMENT.equalsIgnoreCase(part2.getDisposition())) {
+                  htmlBody = part2.getContent().toString();
+                }
+              }
+            }
           } else if (part1.isMimeType("multipart/related")) {
             if (part1.getContent() instanceof Multipart) {
               Multipart multi1 = (Multipart) part1.getContent();
@@ -327,8 +356,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
     if (!isNull(txtBody)) {
       mailMsg.setBody(txtBody);
     } else {
-      String jsoup = Jsoup.clean(htmlBody, Whitelist.relaxed());
-      mailMsg.setBody(jsoup);
+      mailMsg.setBody(htmlBody);
     }
     return JSONObject.fromObject(mailMsg).toString();
   }
@@ -386,8 +414,9 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * @return
    * @throws MessagingException
    * @throws IOException
+   * @throws ParseException
    */
-  private String processSignedMail(MimeMessage mime, MailMessage mailMsg) throws IOException, MessagingException {
+  private String processSignedMail(MimeMessage mime, MailMessage mailMsg) throws IOException, MessagingException, ParseException {
     this.setMailBasicInfoForMailMsg(mime, mailMsg);
 
     String txtBody = null;
@@ -466,8 +495,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
     if (!isNull(txtBody)) {
       mailMsg.setBody(txtBody);
     } else {
-      String jsoup = Jsoup.clean(htmlBody, Whitelist.relaxed());
-      mailMsg.setBody(jsoup);
+      mailMsg.setBody(htmlBody);
     }
     return JSONObject.fromObject(mailMsg).toString();
   }
@@ -527,7 +555,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
         }
       }
     }
-    return attachList.toString();
+    return JSONArray.fromObject(attachList).toString();
   }
 
   /**
@@ -628,9 +656,9 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    */
   protected void saveFile(String fileName, InputStream in) throws IOException {
     File file = new File(fileName);
-    if (!file.exists()) {
-      OutputStream out = null;
-      try {
+    try {
+      if (!file.exists()) {
+        OutputStream out = null;
         out = new BufferedOutputStream(new FileOutputStream(file));
         in = new BufferedInputStream(in);
         byte[] buf = new byte[BUFFSIZE];
@@ -638,7 +666,6 @@ public abstract class AbstractMailReceiver implements MailReceiver {
         while ((len = in.read(buf)) > 0) {
           out.write(buf, 0, len);
         }
-      } finally {
         // close streams
         if (in != null) {
           in.close();
@@ -646,6 +673,15 @@ public abstract class AbstractMailReceiver implements MailReceiver {
         if (out != null) {
           out.close();
         }
+      } else {
+        String e = "Fail to save file. The " + fileName + " already exists.";
+        LOG.error(e);
+        throw new IOException(e);
+      }
+    } finally {
+      // close streams
+      if (in != null) {
+        in.close();
       }
     }
   }
@@ -656,8 +692,10 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * @param mime
    * @param mailMsg
    * @throws MessagingException
+   * @throws ParseException
    */
-  private void setMailBasicInfoForMailMsg(MimeMessage mime, MailMessage mailMsg) throws MessagingException {
+  private void setMailBasicInfoForMailMsg(MimeMessage mime, MailMessage mailMsg) throws MessagingException, ParseException {
+    SimpleDateFormat sdf = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss Z");
     String msgId = mime.getMessageID();
     Address[] from = mime.getFrom();
     Address[] to = mime.getRecipients(RecipientType.TO);
@@ -665,6 +703,7 @@ public abstract class AbstractMailReceiver implements MailReceiver {
     Address[] bcc = mime.getRecipients(RecipientType.BCC);
     String subject = mime.getSubject();
     Date sendDate = mime.getSentDate();
+    String receivedUTCDate = sdf.format(this.resolveReceivedDate(mime));
 
     mailMsg.setMsgId(msgId);
     mailMsg.setFrom(this.convertToMailAddress(from));
@@ -672,7 +711,10 @@ public abstract class AbstractMailReceiver implements MailReceiver {
     mailMsg.setCc(this.convertToMailAddress(cc));
     mailMsg.setBcc(this.convertToMailAddress(bcc));
     mailMsg.setSubject(subject);
-    mailMsg.setSendDate(sendDate.toString());
+    if (sendDate != null) {
+      mailMsg.setSendDate(sdf.format(sendDate));
+    }
+    mailMsg.setReceivedDate(receivedUTCDate);
   }
 
   /**
@@ -702,6 +744,24 @@ public abstract class AbstractMailReceiver implements MailReceiver {
           addressList.add(mailAddress);
         }
       }
+    }
+    return addressList;
+  }
+
+  /**
+   * Convert an e-mail address to a list of MailAddress.
+   * 
+   * @param emailAddress
+   *          EmailAddress is a type of <code>microsoft.exchange.webservices.data.property.complex.EmailAddress<code>.
+   * @return List&lt;MailAddress&gt;
+   */
+  protected List<MailAddress> convertToMailAddress(EmailAddress emailAddress) {
+    List<MailAddress> addressList = new ArrayList<MailAddress>();
+    if (emailAddress != null) {
+      MailAddress mailAddress = new MailAddress();
+      mailAddress.setAddress(emailAddress.getAddress());
+      mailAddress.setName(emailAddress.getName());
+      addressList.add(mailAddress);
     }
     return addressList;
   }
@@ -862,5 +922,46 @@ public abstract class AbstractMailReceiver implements MailReceiver {
     } else {
       return false;
     }
+  }
+
+  /**
+   * Get the email received date from message header if it can not get directly.
+   * 
+   * @param message
+   * @return
+   * @throws MessagingException
+   * @throws ParseException
+   */
+  protected Date resolveReceivedDate(MimeMessage message) throws MessagingException, ParseException {
+    if (message.getReceivedDate() != null) {
+      return message.getReceivedDate();
+    }
+    String[] receivedHeaders = message.getHeader("Received");
+    if (receivedHeaders == null) {
+      return Calendar.getInstance().getTime();
+    }
+    SimpleDateFormat sdf = new SimpleDateFormat("EEE, d MMM yyyy HH:mm:ss Z");
+    Date finalDate = Calendar.getInstance().getTime();
+    finalDate.setTime(0l);
+    boolean found = false;
+    for (String receivedHeader : receivedHeaders) {
+      Pattern pattern = Pattern.compile("^[^;]+;(.+)$");
+      Matcher matcher = pattern.matcher(receivedHeader);
+      if (matcher.matches()) {
+        String regexpMatch = matcher.group(1);
+        if (regexpMatch != null) {
+          regexpMatch = regexpMatch.trim();
+          Date parsedDate = sdf.parse(regexpMatch);
+          if (parsedDate.after(finalDate)) {
+            // finding the later date mentioned in received header
+            finalDate = parsedDate;
+            found = true;
+          }
+        } else {
+          LOG.error("Unable to match received date in header string: " + receivedHeader);
+        }
+      }
+    }
+    return found ? finalDate : Calendar.getInstance().getTime();
   }
 }

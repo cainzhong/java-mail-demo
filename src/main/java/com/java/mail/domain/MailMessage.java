@@ -35,6 +35,9 @@ public class MailMessage {
   /* the date of sending a email. */
   private String sendDate;
 
+  /* the date of receiving a email. */
+  private String receivedDate;
+
   private boolean hasAttachments;
 
   /* a list of attachments */
@@ -124,6 +127,14 @@ public class MailMessage {
 
   public void setSendDate(String sendDate) {
     this.sendDate = sendDate;
+  }
+
+  public String getReceivedDate() {
+    return this.receivedDate;
+  }
+
+  public void setReceivedDate(String receivedDate) {
+    this.receivedDate = receivedDate;
   }
 
   public boolean isHasAttachments() {

@@ -1,5 +1,5 @@
 /*
- * (C) Copyright Hewlett-Packard Company, LP -  All Rights Reserved.
+o * (C) Copyright Hewlett-Packard Company, LP -  All Rights Reserved.
  */
 package com.java.mail.impl;
 
@@ -80,7 +80,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
   @Override
   public String getMsgIdList(String date) throws MessagingException, ParseException {
     List<MailHeader> msgIdList = new ArrayList<MailHeader>();
-    SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT_MM_DD_YYYY);
+    SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT_MM_DD_YYYY_HH_MM_SS);
     Date receivedDate = sdf.parse(date);
 
     sdf.setTimeZone(TimeZone.getTimeZone(TIME_ZONE_UTC));
@@ -93,25 +93,20 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       DateTerm currentDateTerm = new ReceivedDateTerm(ComparisonTerm.LE, currentDate);
       AndTerm andTerm = new AndTerm(receivedDateTerm, currentDateTerm);
       msgs = this.sourceFolder.search(andTerm);
-      for (Message msg : msgs) {
-        MimeMessage mmsg = (MimeMessage) msg;
-        String receivedUTCDate = sdf.format(mmsg.getReceivedDate());
-        MailHeader mailHeader = new MailHeader();
-        mailHeader.setMsgId(mmsg.getMessageID());
-        mailHeader.setFrom(this.convertToMailAddress(mmsg.getFrom()));
-        mailHeader.setReceivedUTCDate(receivedUTCDate);
-        msgIdList.add(mailHeader);
-      }
+      msgs = this.sourceFolder.getMessages();
     } else if (isPOP3orPOP3S(this.protocol)) {
       msgs = this.sourceFolder.getMessages();
       // Get mails and UID
       this.sourceFolder.fetch(msgs, this.profile);
-      for (Message msg : msgs) {
-        MimeMessage mmsg = (MimeMessage) msg;
-        MailHeader mailHeader = new MailHeader();
-        mailHeader.setMsgId(mmsg.getMessageID());
-        msgIdList.add(mailHeader);
-      }
+    }
+    for (Message msg : msgs) {
+      MimeMessage mmsg = (MimeMessage) msg;
+      String receivedUTCDate = sdf.format(this.resolveReceivedDate(mmsg));
+      MailHeader mailHeader = new MailHeader();
+      mailHeader.setMsgId(mmsg.getMessageID());
+      mailHeader.setFrom(this.convertToMailAddress(mmsg.getFrom()));
+      mailHeader.setReceivedUTCDate(receivedUTCDate);
+      msgIdList.add(mailHeader);
     }
     Collections.sort(msgIdList, MailHeader.MailHeaderComparator);
     return JSONArray.fromObject(msgIdList).toString();
@@ -124,7 +119,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     String fileName = null;
     if (messages.length > 0) {
       MimeMessage msg = (MimeMessage) messages[0];
-      if (msg.getSize() <= this.maxMailSize) {
+      if (!this.mailSizeCheck || (msg.getSize() <= this.maxMailSize)) {
         UUID uuid = UUID.randomUUID();
         String tempDir = System.getProperty("java.io.tmpdir");
         fileName = tempDir + uuid + ".eml";
@@ -142,7 +137,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       LOG.error(e);
       throw new Exception(e);
     }
-    return fileName.replace("\\", "\\\\");
+    return fileName;
   }
 
   @Override
@@ -159,8 +154,8 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
             // receive mails according to the message id.
             SearchTerm st = new MessageIDTerm(msgId);
             Message[] messages = this.sourceFolder.search(st);
-            Message msg = messages[0];
-            if (null != msg) {
+            if (messages != null && messages.length != 0) {
+              Message msg = messages[0];
               Message[] needCopyMsgs = new Message[1];
               needCopyMsgs[0] = msg;
               // Copy the msg to the specific folder
@@ -248,11 +243,15 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       this.password = (String) map.get("password");
       this.proxyHost = (String) map.get("proxyHost");
       this.proxyPort = (String) map.get("proxyPort");
+      this.proxyUser = (String) map.get("proxyUser");
+      this.proxyPassword = (String) map.get("proxyPassword");
       this.sourceFolderName = (String) map.get("sourceFolderName");
       try {
+        this.mailSizeCheck = (Boolean) map.get("mailSizeCheck");
         this.maxMailSize = (Integer) map.get("maxMailSize");
       } catch (Exception e) {
         this.maxMailSize = 0;
+        this.mailSizeCheck = false;
       }
       if (map.get("maxMailQuantity") == null) {
         this.maxMailQuantity = DEFAULT_MAX_MAIL_QUANTITY;
@@ -264,7 +263,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
         String e = "Missing mandatory values, please check that you have entered the protocol, host, username or password.";
         LOG.error(e);
         throw new Exception(e);
-      } else if (this.maxMailSize <= 0) {
+      } else if (this.mailSizeCheck && this.maxMailSize <= 0) {
         String e = "Please check the value of max mail size is great than zero.";
         LOG.error(e);
         throw new Exception(e);
@@ -291,11 +290,15 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
    */
   private Properties getProperties() {
     Properties props = new Properties();
-    props.put("mail.smtp.host", this.host);
-    props.put("mail.smtp.port", this.port);
-    props.put("mail.smtp.auth", "true");
-    props.put("mail.store.protocol", this.protocol);
-
+    if (POP3.equalsIgnoreCase(this.protocol)) {
+      props.put("mail.pop3.port", this.port);
+    } else if (POP3S.equalsIgnoreCase(this.protocol)) {
+      props.put("mail.pop3s.port", this.port);
+    } else if (IMAP.equalsIgnoreCase(this.protocol)) {
+      props.put("mail.imap.port", this.port);
+    } else if (IMAPS.equalsIgnoreCase(this.protocol)) {
+      props.put("mail.imaps.port", this.port);
+    }
     props.put("mail.pop3.rsetbeforequit", "true");
     props.put("mail.pop3s.rsetbeforequit", "true");
 
@@ -310,12 +313,6 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
 
     props.put("mail.imap.compress.enable", "true");
     props.put("mail.imaps.compress.enable", "true");
-    // Proxy
-    if (!isNull(this.proxyHost) && !isNull(this.proxyPort)) {
-      props.put("proxySet", "true");
-      props.put("http.proxyHost", this.proxyHost);
-      props.put("http.proxyPort", this.proxyPort);
-    }
     /*
      * General Issues with Multiparts
      * 
@@ -373,8 +370,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
   private void closeFolder(String folderName, boolean expunge) throws MessagingException {
     Folder folder = this.store.getFolder(folderName);
     if (folder != null && folder.isOpen()) {
-      // close the folder, true means that will indeed to delete the
-      // message, false means that will not delete the message.
+      // close the folder, true means that will indeed to delete the message, false means that will not delete the message.
       folder.close(expunge);
     }
   }

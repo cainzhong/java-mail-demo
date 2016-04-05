@@ -22,7 +22,7 @@ public class ReceiveEWSMailTest {
   public static void main(String args[]) {
     Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
     try {
-      String sourceFolderName = "SmartEmail";
+      String sourceFolderName = "INBOX";
       String toFolderName = "Deleted Items";
 
       Map<String, Object> paramMap = new HashMap<String, Object>();
@@ -35,8 +35,11 @@ public class ReceiveEWSMailTest {
       paramMap.put("maxMailSize", 30 * 1024 * 1024);
       paramMap.put("proxyHost", "");
       paramMap.put("proxyPort", "");
+      paramMap.put("mailSizeCheck", false);
+      paramMap.put("maxMailSize", 30);
       paramMap.put("sourceFolderName", sourceFolderName);
       paramMap.put("toFolderName", toFolderName);
+      paramMap.put("errorFolder", null);
       JSONArray paramJsonArray = JSONArray.fromObject(paramMap);
 
       String paramJson = paramJsonArray.toString().substring(1, paramJsonArray.toString().length() - 1);
@@ -44,9 +47,14 @@ public class ReceiveEWSMailTest {
       MailReceiver receiver = factory.create("EWS");
       receiver.open(paramJson);
       String result = "";
-      System.out.println("Get All message id.");
-      String msgIdList = receiver.getMsgIdList("03/03/2016").toString();
-      System.out.println("Message ID List: " + msgIdList);
+      // System.out.println("Get All message id.");
+      // String msgIdList = receiver.getMsgIdList("01/26/2016 09:00:00").toString();
+      // System.out.println("Message ID List: " + msgIdList);
+
+      System.out.println("Receive Mail:");
+      String msgIdList = receiver.getMsgIdList("04/05/2016 09:00:00");
+      // String receive = receiver.receive("AAMkADA2MTg3MTJjLTE4MzktNGVlMC1iMzYzLWE2M2U4ZTQ4ODY3MgBGAAAAAACrnKBohTrQTr55rMZpUsUQBwDlQ7zKWTCjQI2f2wNCI4+cAAKz0gA7AADlQ7zKWTCjQI2f2wNCI4+cAAK02BoKAAA=");
+      System.out.println("Receive Mail: " + msgIdList);
 
       receiver.close();
     } catch (Exception e) {

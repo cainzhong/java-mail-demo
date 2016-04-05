@@ -35,6 +35,7 @@ import microsoft.exchange.webservices.data.core.service.schema.FolderSchema;
 import microsoft.exchange.webservices.data.core.service.schema.ItemSchema;
 import microsoft.exchange.webservices.data.credential.ExchangeCredentials;
 import microsoft.exchange.webservices.data.credential.WebCredentials;
+import microsoft.exchange.webservices.data.credential.WebProxyCredentials;
 import microsoft.exchange.webservices.data.property.complex.FolderId;
 import microsoft.exchange.webservices.data.property.complex.ItemId;
 import microsoft.exchange.webservices.data.property.complex.MimeContent;
@@ -78,6 +79,10 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
     if (!isNull(this.proxyHost) && !isNull(this.proxyPort)) {
       // For EWS proxy
       WebProxy proxy = new WebProxy(this.proxyHost, Integer.valueOf(this.proxyPort));
+      if (!isNull(this.proxyUser) && !isNull(this.proxyPassword)) {
+        WebProxyCredentials proxyCredentials = new WebProxyCredentials(this.proxyUser, this.proxyPassword, null);
+        proxy = new WebProxy(this.proxyHost, Integer.valueOf(this.proxyPort), proxyCredentials);
+      }
       this.service.setWebProxy(proxy);
     }
   }
@@ -86,7 +91,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
   public String getMsgIdList(String date) throws Exception {
     List<MailHeader> msgIdList = new ArrayList<MailHeader>();
 
-    SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT_MM_DD_YYYY);
+    SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT_MM_DD_YYYY_HH_MM_SS);
     Date receivedDate = sdf.parse(date);
 
     sdf.setTimeZone(TimeZone.getTimeZone(TIME_ZONE_UTC));
@@ -101,9 +106,11 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
     ItemView view = new ItemView(this.maxMailQuantity);
     FindItemsResults<Item> findResults = this.service.findItems(sourceFolderId, filter, view);
     for (Item item : findResults) {
-      String receivedUTCDate = sdf.format(item.getDateTimeReceived());
+      EmailMessage emailMessage = EmailMessage.bind(this.service, item.getId());
+      String receivedUTCDate = sdf.format(emailMessage.getDateTimeReceived());
       MailHeader mailHeader = new MailHeader();
-      mailHeader.setMsgId(item.getId().toString());
+      mailHeader.setMsgId(emailMessage.getId().toString());
+      mailHeader.setFrom(this.convertToMailAddress(emailMessage.getFrom()));
       mailHeader.setReceivedUTCDate(receivedUTCDate);
       msgIdList.add(mailHeader);
     }
@@ -116,7 +123,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
     ItemId itemId = new ItemId(messageId);
     Item item = Item.bind(this.service, itemId, PropertySet.FirstClassProperties);
     if (item != null) {
-      if (item.getSize() <= this.maxMailSize) {
+      if (!this.mailSizeCheck || item.getSize() <= this.maxMailSize) {
         item.load(new PropertySet(ItemSchema.MimeContent));
         MimeContent mc = item.getMimeContent();
 
@@ -136,7 +143,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
       LOG.error(e);
       throw new Exception(e);
     }
-    return fileName.replace("\\", "\\\\");
+    return fileName;
   }
 
   @Override
@@ -177,12 +184,16 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
       this.password = (String) map.get("password");
       this.proxyHost = (String) map.get("proxyHost");
       this.proxyPort = (String) map.get("proxyPort");
+      this.proxyUser = (String) map.get("proxyUser");
+      this.proxyPassword = (String) map.get("proxyPassword");
       this.sourceFolderName = (String) map.get("sourceFolderName");
       this.uri = (String) map.get("uri");
       try {
+        this.mailSizeCheck = (Boolean) map.get("mailSizeCheck");
         this.maxMailSize = (Integer) map.get("maxMailSize");
       } catch (Exception e) {
         this.maxMailSize = 0;
+        this.mailSizeCheck = false;
       }
       if (map.get("maxMailQuantity") == null) {
         this.maxMailQuantity = DEFAULT_MAX_MAIL_QUANTITY;
@@ -192,6 +203,10 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
 
       if (isNull(this.username) || isNull(this.password)) {
         String e = "Missing mandatory values, please check that you have entered the username, password.";
+        LOG.error(e);
+        throw new Exception(e);
+      } else if (this.mailSizeCheck && this.maxMailSize <= 0) {
+        String e = "Please check the value of max mail size is great than zero.";
         LOG.error(e);
         throw new Exception(e);
       } else {

@@ -50,7 +50,7 @@ public class MailHeader {
     public int compare(MailHeader m1, MailHeader m2) {
       String receivedUTCDate1 = m1.getReceivedUTCDate().toLowerCase();
       String receivedUTCDate2 = m2.getReceivedUTCDate().toLowerCase();
-      SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy");
+      SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
       try {
         Date receivedDate1 = sdf.parse(receivedUTCDate1);
         Date receivedDate2 = sdf.parse(receivedUTCDate2);
