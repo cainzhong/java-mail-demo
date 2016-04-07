@@ -20,6 +20,8 @@ public class MailHeader {
 
   private String receivedUTCDate;
 
+  private int mailSize;
+
   public String getMsgId() {
     return this.msgId;
   }
@@ -42,6 +44,14 @@ public class MailHeader {
 
   public void setReceivedUTCDate(String receivedUTCDate) {
     this.receivedUTCDate = receivedUTCDate;
+  }
+
+  public int getMailSize() {
+    return this.mailSize;
+  }
+
+  public void setMailSize(int mailSize) {
+    this.mailSize = mailSize;
   }
 
   /* Comparator for sorting the list by receivedUTCDate */

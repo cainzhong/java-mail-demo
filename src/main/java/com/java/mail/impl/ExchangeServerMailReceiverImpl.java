@@ -16,11 +16,13 @@ import java.util.Properties;
 import java.util.TimeZone;
 import java.util.UUID;
 
+import javax.mail.Authenticator;
 import javax.mail.FetchProfile;
 import javax.mail.Flags;
 import javax.mail.Folder;
 import javax.mail.Message;
 import javax.mail.MessagingException;
+import javax.mail.PasswordAuthentication;
 import javax.mail.Session;
 import javax.mail.UIDFolder;
 import javax.mail.internet.MimeMessage;
@@ -52,7 +54,20 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     this.initialize(jsonParam);
 
     Properties props = this.getProperties();
-    this.session = Session.getDefaultInstance(props, null);
+    if (!isNull(this.proxyUser) && !isNull(this.proxyPassword)) {
+      final String socksProxyUser = this.proxyUser;
+      final String socksProxyPassword = this.proxyPassword;
+      Authenticator authenticator = new Authenticator() {
+        @Override
+        protected PasswordAuthentication getPasswordAuthentication() {
+          PasswordAuthentication passwordAuthentication = new PasswordAuthentication(socksProxyUser, socksProxyPassword);
+          return passwordAuthentication;
+        }
+      };
+      this.session = Session.getDefaultInstance(props, authenticator);
+    } else {
+      this.session = Session.getDefaultInstance(props, null);
+    }
     this.store = this.session.getStore(this.protocol);
     this.store.connect(this.host, this.username, this.password);
     this.profile = new FetchProfile();
@@ -93,7 +108,6 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       DateTerm currentDateTerm = new ReceivedDateTerm(ComparisonTerm.LE, currentDate);
       AndTerm andTerm = new AndTerm(receivedDateTerm, currentDateTerm);
       msgs = this.sourceFolder.search(andTerm);
-      msgs = this.sourceFolder.getMessages();
     } else if (isPOP3orPOP3S(this.protocol)) {
       msgs = this.sourceFolder.getMessages();
       // Get mails and UID
@@ -106,6 +120,7 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       mailHeader.setMsgId(mmsg.getMessageID());
       mailHeader.setFrom(this.convertToMailAddress(mmsg.getFrom()));
       mailHeader.setReceivedUTCDate(receivedUTCDate);
+      mailHeader.setMailSize(mmsg.getSize());
       msgIdList.add(mailHeader);
     }
     Collections.sort(msgIdList, MailHeader.MailHeaderComparator);
@@ -119,19 +134,13 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     String fileName = null;
     if (messages.length > 0) {
       MimeMessage msg = (MimeMessage) messages[0];
-      if (!this.mailSizeCheck || (msg.getSize() <= this.maxMailSize)) {
-        UUID uuid = UUID.randomUUID();
-        String tempDir = System.getProperty("java.io.tmpdir");
-        fileName = tempDir + uuid + ".eml";
-        File saveFile = new File(fileName);
-        FileOutputStream fs = new FileOutputStream(saveFile);
-        msg.writeTo(fs);
-        fs.close();
-      } else {
-        String e = "The current mail size is great than the accepted max mail size. Subject: " + msg.getSubject() + ", From: " + msg.getFrom();
-        LOG.error(e);
-        throw new Exception(e);
-      }
+      UUID uuid = UUID.randomUUID();
+      String tempDir = System.getProperty("java.io.tmpdir");
+      fileName = tempDir + uuid + ".eml";
+      File saveFile = new File(fileName);
+      FileOutputStream fs = new FileOutputStream(saveFile);
+      msg.writeTo(fs);
+      fs.close();
     } else {
       String e = "The email with message id: " + messageId + " can not be found.";
       LOG.error(e);
@@ -246,13 +255,6 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
       this.proxyUser = (String) map.get("proxyUser");
       this.proxyPassword = (String) map.get("proxyPassword");
       this.sourceFolderName = (String) map.get("sourceFolderName");
-      try {
-        this.mailSizeCheck = (Boolean) map.get("mailSizeCheck");
-        this.maxMailSize = (Integer) map.get("maxMailSize");
-      } catch (Exception e) {
-        this.maxMailSize = 0;
-        this.mailSizeCheck = false;
-      }
       if (map.get("maxMailQuantity") == null) {
         this.maxMailQuantity = DEFAULT_MAX_MAIL_QUANTITY;
       } else {
@@ -261,10 +263,6 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
 
       if (isNull(this.protocol) || isNull(this.host) || isNull(this.username) || isNull(this.password)) {
         String e = "Missing mandatory values, please check that you have entered the protocol, host, username or password.";
-        LOG.error(e);
-        throw new Exception(e);
-      } else if (this.mailSizeCheck && this.maxMailSize <= 0) {
-        String e = "Please check the value of max mail size is great than zero.";
         LOG.error(e);
         throw new Exception(e);
       } else {
@@ -292,27 +290,39 @@ public class ExchangeServerMailReceiverImpl extends AbstractMailReceiver {
     Properties props = new Properties();
     if (POP3.equalsIgnoreCase(this.protocol)) {
       props.put("mail.pop3.port", this.port);
+      props.put("mail.pop3.rsetbeforequit", "true");
+      if (!isNull(this.proxyHost) && !isNull(this.proxyPort)) {
+        props.put("mail.pop3.socks.host", this.proxyHost);
+        props.put("mail.pop3.socks.port", this.proxyPort);
+      }
     } else if (POP3S.equalsIgnoreCase(this.protocol)) {
       props.put("mail.pop3s.port", this.port);
+      props.put("mail.pop3s.rsetbeforequit", "true");
+      if (!isNull(this.proxyHost) && !isNull(this.proxyPort)) {
+        props.put("mail.pop3s.socks.host", this.proxyHost);
+        props.put("mail.pop3s.socks.port", this.proxyPort);
+      }
     } else if (IMAP.equalsIgnoreCase(this.protocol)) {
       props.put("mail.imap.port", this.port);
+      props.put("mail.imap.partialfetch", "false");
+      props.put("mail.imap.fetchsize", "1048576");
+      props.put("mail.imap.compress.enable", "true");
+      // props.put("mail.imap.starttls.enable", "true");
+      if (!isNull(this.proxyHost) && !isNull(this.proxyPort)) {
+        props.put("mail.imap.socks.host", this.proxyHost);
+        props.put("mail.imap.socks.port", this.proxyPort);
+      }
     } else if (IMAPS.equalsIgnoreCase(this.protocol)) {
       props.put("mail.imaps.port", this.port);
+      props.put("mail.imaps.partialfetch", "false");
+      props.put("mail.imaps.fetchsize", "1048576");
+      props.put("mail.imaps.compress.enable", "true");
+      // props.put("mail.imaps.starttls.enable", "true");
+      if (!isNull(this.proxyHost) && !isNull(this.proxyPort)) {
+        props.put("mail.imaps.socks.host", this.proxyHost);
+        props.put("mail.imaps.socks.port", this.proxyPort);
+      }
     }
-    props.put("mail.pop3.rsetbeforequit", "true");
-    props.put("mail.pop3s.rsetbeforequit", "true");
-
-    props.put("mail.imap.partialfetch", "false");
-    props.put("mail.imaps.partialfetch", "false");
-
-    props.put("mail.imap.fetchsize", "1048576");
-    props.put("mail.imaps.fetchsize", "1048576");
-
-    // props.put("mail.imap.starttls.enable", "true");
-    // props.put("mail.imaps.starttls.enable", "true");
-
-    props.put("mail.imap.compress.enable", "true");
-    props.put("mail.imaps.compress.enable", "true");
     /*
      * General Issues with Multiparts
      * 

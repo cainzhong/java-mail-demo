@@ -7,7 +7,6 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -147,11 +146,6 @@ public abstract class AbstractMailReceiver implements MailReceiver {
   /* the maximum quantity for receiving mails during one time */
   protected int maxMailQuantity;
 
-  protected boolean mailSizeCheck = true;
-
-  /* the maximum size for one single mail */
-  protected int maxMailSize;
-
   protected String uri;
 
   static {
@@ -191,7 +185,6 @@ public abstract class AbstractMailReceiver implements MailReceiver {
    * 
    * @param filePath
    * @return
-   * @throws FileNotFoundException
    * @throws MessagingException
    * @throws IOException
    */

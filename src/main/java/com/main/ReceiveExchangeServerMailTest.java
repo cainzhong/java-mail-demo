@@ -28,16 +28,16 @@ public class ReceiveExchangeServerMailTest {
       String host = "imap-mail.outlook.com";
       host = "pop.163.com";
       paramMap.put("host", host);
-      paramMap.put("port", "995");
+      paramMap.put("port", "110");
       paramMap.put("proxyHost", null);
       paramMap.put("proxyPort", null);
-      paramMap.put("protocol", "pop3s");
+      paramMap.put("protocol", "pop3");
       // String username = "18616680719@163.com";
       // String password = "wxj824188950";
       // String username = "cainzhong@163.com";
       // String password = "Cisco520";
-      String username = "cainzhong@aliyun.com";
-      String password = "Cainzhong520";
+      String username = "18971546556@163.com";
+      String password = "89055465lixue";
       username = "cainzhong@outlook.com";
       password = "Cisco01!";
       username = "18616680719@163.com";
@@ -60,21 +60,9 @@ public class ReceiveExchangeServerMailTest {
       System.out.println("Get All message id.");
       String msgIdList = receiver.getMsgIdList("01/14/2016 09:00:00").toString();
       System.out.println("Message ID List: " + msgIdList);
-
-      // { "msgId": "msgId", "folder": "folder name" }
-      Map<String, Object> moveMsgMap = new HashMap<String, Object>();
-      String msgId = "<185ac3dc-ab05-4133-a1f5-8bc3db6997fd@xtinp1mta402.xt.local>";
-      String folder = "Deleted Items";
-      moveMsgMap.put("msgId", msgId);
-      moveMsgMap.put("folder", folder);
-      JSONArray moveMsgJsonArray = JSONArray.fromObject(moveMsgMap);
-
-      String moveMsgJson = moveMsgJsonArray.toString().substring(1, moveMsgJsonArray.toString().length() - 1);
-
-      // receiver.moveMessage(moveMsgJson);
-      // receiver.deleteMessage(msgId);
-      System.out.println("Moved");
-
+      String msgId = "<tencent_144D1A265E880B4B6AFB439A@qq.com>";
+      String mailMsg = receiver.receive(msgId);
+      System.out.println(mailMsg);
       receiver.close();
     } catch (Exception e) {
       e.printStackTrace();

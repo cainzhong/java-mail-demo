@@ -112,6 +112,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
       mailHeader.setMsgId(emailMessage.getId().toString());
       mailHeader.setFrom(this.convertToMailAddress(emailMessage.getFrom()));
       mailHeader.setReceivedUTCDate(receivedUTCDate);
+      mailHeader.setMailSize(emailMessage.getSize());
       msgIdList.add(mailHeader);
     }
     return JSONArray.fromObject(msgIdList).toString();
@@ -123,21 +124,15 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
     ItemId itemId = new ItemId(messageId);
     Item item = Item.bind(this.service, itemId, PropertySet.FirstClassProperties);
     if (item != null) {
-      if (!this.mailSizeCheck || item.getSize() <= this.maxMailSize) {
-        item.load(new PropertySet(ItemSchema.MimeContent));
-        MimeContent mc = item.getMimeContent();
+      item.load(new PropertySet(ItemSchema.MimeContent));
+      MimeContent mc = item.getMimeContent();
 
-        UUID uuid = UUID.randomUUID();
-        String tempDir = System.getProperty("java.io.tmpdir");
-        fileName = tempDir + uuid + "." + "eml";
-        FileOutputStream fs = new FileOutputStream(fileName);
-        fs.write(mc.getContent(), 0, mc.getContent().length);
-        fs.close();
-      } else {
-        String e = "The current mail size is great than the accepted max mail size. Subject: " + item.getSubject();
-        LOG.error(e);
-        throw new Exception(e);
-      }
+      UUID uuid = UUID.randomUUID();
+      String tempDir = System.getProperty("java.io.tmpdir");
+      fileName = tempDir + uuid + "." + "eml";
+      FileOutputStream fs = new FileOutputStream(fileName);
+      fs.write(mc.getContent(), 0, mc.getContent().length);
+      fs.close();
     } else {
       String e = "The email with message id: " + messageId + " can not be found.";
       LOG.error(e);
@@ -176,7 +171,7 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
   }
 
   private void initialize(String jsonParam) throws Exception {
-    LOG.info(jsonParam);
+    LOG.debug(jsonParam);
     JSONObject jsonObject = JSONObject.fromObject(jsonParam);
     Map<String, Object> map = JSONUtil.convertJsonToMap(jsonObject);
     if (map != null && !map.isEmpty()) {
@@ -188,13 +183,6 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
       this.proxyPassword = (String) map.get("proxyPassword");
       this.sourceFolderName = (String) map.get("sourceFolderName");
       this.uri = (String) map.get("uri");
-      try {
-        this.mailSizeCheck = (Boolean) map.get("mailSizeCheck");
-        this.maxMailSize = (Integer) map.get("maxMailSize");
-      } catch (Exception e) {
-        this.maxMailSize = 0;
-        this.mailSizeCheck = false;
-      }
       if (map.get("maxMailQuantity") == null) {
         this.maxMailQuantity = DEFAULT_MAX_MAIL_QUANTITY;
       } else {
@@ -203,10 +191,6 @@ public class EWSMailReceiverImpl extends AbstractMailReceiver {
 
       if (isNull(this.username) || isNull(this.password)) {
         String e = "Missing mandatory values, please check that you have entered the username, password.";
-        LOG.error(e);
-        throw new Exception(e);
-      } else if (this.mailSizeCheck && this.maxMailSize <= 0) {
-        String e = "Please check the value of max mail size is great than zero.";
         LOG.error(e);
         throw new Exception(e);
       } else {
